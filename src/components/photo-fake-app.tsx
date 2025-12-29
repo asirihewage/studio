@@ -258,7 +258,7 @@ export function PhotoFakeApp() {
 
             exifObj["0th"][piexif.Tag.Image.Make] = phoneModel.split(' ')[0];
             exifObj["0th"][piexif.Tag.Image.Model] = phoneModel;
-            exifObj["0th"][piexif.Tag.Image.Software] = "PhotoFake";
+            exifObj["0th"][piexif.Tag.Image.Software] = "ExifLab";
             
             exifObj["Exif"][piexif.Tag.Exif.DateTimeOriginal] = formattedDateTime;
             exifObj["Exif"][piexif.Tag.Exif.CreateDate] = formattedDateTime;
@@ -290,7 +290,7 @@ export function PhotoFakeApp() {
 
     const name = imageFile.name.substring(0, imageFile.name.lastIndexOf('.'));
     const ext = imageFile.name.substring(imageFile.name.lastIndexOf('.'));
-    link.download = `${name}_photofake${ext}`;
+    link.download = `${name}_exiflab${ext}`;
     
     document.body.appendChild(link);
     link.click();
@@ -333,7 +333,7 @@ export function PhotoFakeApp() {
                 <Camera className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-                <CardTitle className="text-2xl font-headline">PhotoFake</CardTitle>
+                <CardTitle className="text-2xl font-headline">ExifLab</CardTitle>
                 <CardDescription>
                 Generate realistic EXIF data for your images.
                 </CardDescription>
