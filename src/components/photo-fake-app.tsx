@@ -94,7 +94,7 @@ export function PhotoFakeApp() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      phoneModel: "",
+      phoneModel: "none",
       date: new Date(),
       time: format(new Date(), "HH:mm"),
       latitude: 40.7128,
@@ -118,9 +118,9 @@ export function PhotoFakeApp() {
     };
     
     reset({
-      phoneModel: exif.Model || "",
-      date: exif.DateTimeOriginal ? new Date(exif.DateTimeOriginal.replace(/:/, '-').replace(/:/, '-')) : new Date(),
-      time: exif.DateTimeOriginal ? format(new Date(exif.DateTimeOriginal.replace(/:/, '-').replace(/:/, '-')), "HH:mm") : format(new Date(), "HH:mm"),
+      phoneModel: exif.Model || "none",
+      date: exif.DateTimeOriginal ? new Date(exif.DateTimeOriginal.replace(/:/g, '-')) : new Date(),
+      time: exif.DateTimeOriginal ? format(new Date(exif.DateTimeOriginal.replace(/:/g, '-')), "HH:mm") : format(new Date(), "HH:mm"),
       latitude: exif.GPSLatitude ? parseFloat(exif.GPSLatitude) : 40.7128,
       longitude: exif.GPSLongitude ? parseFloat(exif.GPSLongitude) : -74.006,
     });
@@ -222,7 +222,7 @@ export function PhotoFakeApp() {
     setExistingExif(null);
     setIsEditing(false);
     reset({
-      phoneModel: "",
+      phoneModel: "none",
       date: new Date(),
       time: format(new Date(), "HH:mm"),
       latitude: 40.7128,
@@ -564,9 +564,9 @@ export function PhotoFakeApp() {
                     </div>
                     
                     {isEditing && (
-                        <div className="space-y-6">
+                        <div className="space-y-4">
                             <Form {...form}>
-                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-6 flex flex-col">
+                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-4 flex flex-col">
                                     <div className="space-y-2">
                                         <FormLabel>Quick Actions</FormLabel>
                                         <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
@@ -636,7 +636,7 @@ export function PhotoFakeApp() {
                                         )}
                                         />
                                     </div>
-                                    <div className="col-span-1">
+                                    <div>
                                         <div className="flex justify-between items-center mb-2">
                                             <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4" />Location</FormLabel>
                                             <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isProcessing}>
