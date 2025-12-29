@@ -129,14 +129,14 @@ export function PhotoFakeApp() {
             try {
                 const exifData = piexif.load(e.target?.result as string);
                 const gps = exifData['GPS'] || {};
-                const lat = gps[piexif.Tag.GPS.GPSLatitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.Tag.GPS.GPSLatitude], gps[piexif.Tag.GPS.GPSLatitudeRef]) : undefined;
-                const lon = gps[piexif.Tag.GPS.GPSLongitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.Tag.GPS.GPSLongitude], gps[piexif.Tag.GPS.GPSLongitudeRef]) : undefined;
+                const lat = gps[piexif.GPS.GPSLatitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.GPS.GPSLatitude], gps[piexif.GPS.GPSLatitudeRef]) : undefined;
+                const lon = gps[piexif.GPS.GPSLongitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.GPS.GPSLongitude], gps[piexif.GPS.GPSLongitudeRef]) : undefined;
                 
                 setExistingExif({
-                    Make: exifData['0th'][piexif.Tag.Image.Make],
-                    Model: exifData['0th'][piexif.Tag.Image.Model],
-                    DateTimeOriginal: exifData['Exif'][piexif.Tag.Exif.DateTimeOriginal],
-                    CreateDate: exifData['Exif'][piexif.Tag.Exif.CreateDate],
+                    Make: exifData['0th'][piexif.ImageIFD.Make],
+                    Model: exifData['0th'][piexif.ImageIFD.Model],
+                    DateTimeOriginal: exifData['Exif'][piexif.ExifIFD.DateTimeOriginal],
+                    CreateDate: exifData['Exif'][piexif.ExifIFD.CreateDate],
                     GPSLatitude: lat?.toFixed(4),
                     GPSLongitude: lon?.toFixed(4),
                 });
@@ -289,17 +289,17 @@ export function PhotoFakeApp() {
 
         const exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null };
 
-        exifObj["0th"][piexif.Tag.Image.Make] = phoneModel.split(' ')[0];
-        exifObj["0th"][piexif.Tag.Image.Model] = phoneModel;
-        exifObj["0th"][piexif.Tag.Image.Software] = "ExifLab";
+        exifObj["0th"][piexif.ImageIFD.Make] = phoneModel.split(' ')[0];
+        exifObj["0th"][piexif.ImageIFD.Model] = phoneModel;
+        exifObj["0th"][piexif.ImageIFD.Software] = "ExifLab";
         
-        exifObj["Exif"][piexif.Tag.Exif.DateTimeOriginal] = formattedDateTime;
-        exifObj["Exif"][piexif.Tag.Exif.CreateDate] = formattedDateTime;
+        exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
+        exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
         
-        exifObj["GPS"][piexif.Tag.GPS.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
-        exifObj["GPS"][piexif.Tag.GPS.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(latitude));
-        exifObj["GPS"][piexif.Tag.GPS.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
-        exifObj["GPS"][piexif.Tag.GPS.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
+        exifObj["GPS"][piexif.GPS.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
+        exifObj["GPS"][piexif.GPS.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(latitude));
+        exifObj["GPS"][piexif.GPS.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
+        exifObj["GPS"][piexif.GPS.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
 
         const exifStr = piexif.dump(exifObj);
         
