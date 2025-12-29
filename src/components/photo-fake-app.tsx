@@ -4,6 +4,7 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import piexif from "piexifjs";
 import {
   Camera,
   ChevronLeft,
@@ -69,33 +70,10 @@ const formSchema = z.object({
     .max(180, "Must be between -180 and 180"),
 });
 
-function generateExifData(values: z.infer<typeof formSchema>): string {
-    const { phoneModel, date, time, latitude, longitude } = values;
-    const [hours, minutes] = time.split(":").map(Number);
-    const combinedDateTime = new Date(date);
-    combinedDateTime.setHours(hours, minutes, 0, 0);
-
-    const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
-
-    // Basic EXIF structure
-    const exifData = `
-Make: ${phoneModel.split(' ')[0]}
-Model: ${phoneModel}
-DateTimeOriginal: ${formattedDateTime}
-GPSLatitude: ${latitude}
-GPSLatitudeRef: ${latitude >= 0 ? 'N' : 'S'}
-GPSLongitude: ${longitude}
-GPSLongitudeRef: ${longitude >= 0 ? 'E' : 'W'}
-    `.trim();
-
-    return exifData;
-}
-
-
 export function PhotoFakeApp() {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imageSrc, setImageSrc] = React.useState<string | null>(null);
-  const [exifData, setExifData] = React.useState<string | null>(null);
+  const [modifiedImageSrc, setModifiedImageSrc] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
@@ -115,11 +93,11 @@ export function PhotoFakeApp() {
 
   const handleFileSelect = (file: File | null | undefined) => {
     if (file) {
-      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      if (!['image/jpeg'].includes(file.type)) {
         toast({
             variant: 'destructive',
             title: 'Invalid File Type',
-            description: 'Please upload a PNG, JPG, or WEBP file.',
+            description: 'Please upload a JPG/JPEG file. EXIF data is only supported for this format.',
         });
         return;
       }
@@ -128,7 +106,7 @@ export function PhotoFakeApp() {
       }
       setImageFile(file);
       setImageSrc(URL.createObjectURL(file));
-      setExifData(null);
+      setModifiedImageSrc(null);
     }
   }
 
@@ -156,9 +134,12 @@ export function PhotoFakeApp() {
     if (imageSrc) {
       URL.revokeObjectURL(imageSrc);
     }
+    if (modifiedImageSrc) {
+        URL.revokeObjectURL(modifiedImageSrc);
+    }
     setImageFile(null);
     setImageSrc(null);
-    setExifData(null);
+    setModifiedImageSrc(null);
     form.reset();
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -166,15 +147,18 @@ export function PhotoFakeApp() {
   };
   
   const handleBackToForm = () => {
-    setExifData(null);
+    if (modifiedImageSrc) {
+        URL.revokeObjectURL(modifiedImageSrc);
+    }
+    setModifiedImageSrc(null);
   }
   
   const handleFetchLocation = () => {
     setIsFetchingLocation(true);
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((position) => {
-            form.setValue('latitude', position.coords.latitude);
-            form.setValue('longitude', position.coords.longitude);
+            form.setValue('latitude', parseFloat(position.coords.latitude.toFixed(4)));
+            form.setValue('longitude', parseFloat(position.coords.longitude.toFixed(4)));
             toast({
                 title: "Location Updated",
                 description: "Your current location has been set.",
@@ -200,7 +184,7 @@ export function PhotoFakeApp() {
 
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
-    if (!imageFile) {
+    if (!imageFile || !imageSrc) {
       toast({
         variant: "destructive",
         title: "No Image",
@@ -210,35 +194,64 @@ export function PhotoFakeApp() {
     }
     
     startTransition(() => {
-        const result = generateExifData(values);
-        setExifData(result);
+        const { phoneModel, date, time, latitude, longitude } = values;
+        const [hours, minutes] = time.split(":").map(Number);
+        const combinedDateTime = new Date(date);
+        combinedDateTime.setHours(hours, minutes, 0, 0);
+
+        const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
+
+        const exif = {
+            "0th": {
+                [piexif.Tag.Image.Make]: phoneModel.split(' ')[0],
+                [piexif.Tag.Image.Model]: phoneModel,
+                [piexif.Tag.Image.Software]: "PhotoFake",
+            },
+            "Exif": {
+                [piexif.Tag.Exif.DateTimeOriginal]: formattedDateTime,
+                [piexif.Tag.Exif.CreateDate]: formattedDateTime,
+            },
+            "GPS": {
+                [piexif.Tag.GPS.GPSLatitudeRef]: latitude >= 0 ? "N" : "S",
+                [piexif.Tag.GPS.GPSLatitude]: piexif.GPSHelper.degToDms(Math.abs(latitude)),
+                [piexif.Tag.GPS.GPSLongitudeRef]: longitude >= 0 ? "E" : "W",
+                [piexif.Tag.GPS.GPSLongitude]: piexif.GPSHelper.degToDms(Math.abs(longitude)),
+            }
+        };
+
+        const exifStr = piexif.dump(exif);
+        const newImageData = piexif.insert(exifStr, imageSrc);
+        
+        setModifiedImageSrc(newImageData);
+        
         toast({
             title: "Success!",
-            description: "Realistic EXIF data has been generated.",
+            description: "Image metadata has been updated.",
         });
     });
   };
 
-  const handleDownloadExif = () => {
-    if (!exifData) return;
-    const blob = new Blob([exifData], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
+  const handleDownloadImage = () => {
+    if (!modifiedImageSrc || !imageFile) return;
+
     const link = document.createElement("a");
-    link.href = url;
-    link.download = `${imageFile?.name.split('.')[0]}_exif.txt` || "generated_exif.txt";
+    link.href = modifiedImageSrc;
+
+    const name = imageFile.name.substring(0, imageFile.name.lastIndexOf('.'));
+    const ext = imageFile.name.substring(imageFile.name.lastIndexOf('.'));
+    link.download = `${name}_photofake${ext}`;
+    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
   
   React.useEffect(() => {
     return () => {
-      if (imageSrc) {
-        URL.revokeObjectURL(imageSrc);
-      }
+      if (imageSrc) URL.revokeObjectURL(imageSrc);
+      if (modifiedImageSrc) URL.revokeObjectURL(modifiedImageSrc);
     };
-  }, [imageSrc]);
+  }, [imageSrc, modifiedImageSrc]);
 
   return (
     <Card className="w-full max-w-2xl shadow-2xl">
@@ -260,38 +273,38 @@ export function PhotoFakeApp() {
           <div
             className={cn(
                 "flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors",
-                isDragging && "bg-muted/50 border-primary"
+                isDragging && "bg-primary/10 border-primary"
             )}
             onClick={() => fileInputRef.current?.click()}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <CloudUpload className="h-12 w-12 text-muted-foreground/70 mb-4" />
+            <CloudUpload className={cn("h-12 w-12 text-muted-foreground/70 mb-4 transition-transform", isDragging && "scale-110")} />
             <p className="font-semibold text-foreground">
               Click to upload or drag & drop
             </p>
             <p className="text-sm text-muted-foreground">
-              PNG, JPG, WEBP up to 10MB
+              JPG/JPEG files only
             </p>
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept="image/png, image/jpeg, image/webp"
+              accept="image/jpeg"
             />
           </div>
         )}
 
-        {imageSrc && !exifData && (
+        {imageSrc && !modifiedImageSrc && (
           <div className="space-y-6">
             <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
               <Image
                 src={imageSrc}
                 alt="Uploaded preview"
                 fill
-                objectFit="contain"
+                style={{objectFit:"contain"}}
               />
             </div>
             <Form {...form}>
@@ -430,7 +443,7 @@ export function PhotoFakeApp() {
                     {isPending ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : null}
-                    Generate EXIF
+                    Generate & Download
                     </Button>
                 </CardFooter>
               </form>
@@ -438,20 +451,22 @@ export function PhotoFakeApp() {
           </div>
         )}
         
-        {imageSrc && exifData && (
-            <div className="space-y-4">
-                 <h3 className="text-lg font-semibold text-center">Generated EXIF Data</h3>
-                <Card className="bg-muted/50 max-h-80 overflow-y-auto">
-                    <CardContent className="p-4">
-                        <pre className="text-sm whitespace-pre-wrap"><code>{exifData}</code></pre>
-                    </CardContent>
-                </Card>
+        {imageSrc && modifiedImageSrc && (
+            <div className="space-y-6">
+                <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                    <Image
+                        src={modifiedImageSrc}
+                        alt="Modified preview"
+                        fill
+                        style={{objectFit:"contain"}}
+                    />
+                </div>
                  <CardFooter className="flex justify-between p-0">
                     <Button variant="outline" onClick={handleBackToForm}>
                         <ChevronLeft className="mr-2 h-4 w-4" /> Back to Edit
                     </Button>
-                    <Button onClick={handleDownloadExif} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                        <Download className="mr-2 h-4 w-4" /> Download EXIF
+                    <Button onClick={handleDownloadImage} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                        <Download className="mr-2 h-4 w-4" /> Download Image
                     </Button>
                 </CardFooter>
             </div>
