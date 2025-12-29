@@ -129,8 +129,8 @@ export function PhotoFakeApp() {
             try {
                 const exifData = piexif.load(e.target?.result as string);
                 const gps = exifData['GPS'] || {};
-                const lat = gps[piexif.GPS.GPSLatitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.GPS.GPSLatitude], gps[piexif.GPS.GPSLatitudeRef]) : undefined;
-                const lon = gps[piexif.GPS.GPSLongitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.GPS.GPSLongitude], gps[piexif.GPS.GPSLongitudeRef]) : undefined;
+                const lat = gps[piexif.GPSIFD.GPSLatitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.GPSIFD.GPSLatitude], gps[piexif.GPSIFD.GPSLatitudeRef]) : undefined;
+                const lon = gps[piexif.GPSIFD.GPSLongitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.GPSIFD.GPSLongitude], gps[piexif.GPSIFD.GPSLongitudeRef]) : undefined;
                 
                 setExistingExif({
                     Make: exifData['0th'][piexif.ImageIFD.Make],
@@ -296,10 +296,10 @@ export function PhotoFakeApp() {
         exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
         exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
         
-        exifObj["GPS"][piexif.GPS.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
-        exifObj["GPS"][piexif.GPS.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(latitude));
-        exifObj["GPS"][piexif.GPS.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
-        exifObj["GPS"][piexif.GPS.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
+        exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
+        exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(latitude));
+        exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
+        exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
 
         const exifStr = piexif.dump(exifObj);
         
@@ -622,3 +622,5 @@ export function PhotoFakeApp() {
     </Card>
   );
 }
+
+    
