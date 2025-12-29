@@ -98,6 +98,7 @@ export function PhotoFakeApp() {
   const [exifData, setExifData] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
+  const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -112,9 +113,16 @@ export function PhotoFakeApp() {
     },
   });
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleFileSelect = (file: File | null | undefined) => {
     if (file) {
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        toast({
+            variant: 'destructive',
+            title: 'Invalid File Type',
+            description: 'Please upload a PNG, JPG, or WEBP file.',
+        });
+        return;
+      }
       if (imageSrc) {
         URL.revokeObjectURL(imageSrc);
       }
@@ -122,6 +130,26 @@ export function PhotoFakeApp() {
       setImageSrc(URL.createObjectURL(file));
       setExifData(null);
     }
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileSelect(event.target.files?.[0]);
+  };
+  
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    handleFileSelect(event.dataTransfer.files?.[0]);
   };
 
   const handleReset = () => {
@@ -230,8 +258,14 @@ export function PhotoFakeApp() {
       <CardContent>
         {!imageSrc && (
           <div
-            className="flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors"
+            className={cn(
+                "flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors",
+                isDragging && "bg-muted/50 border-primary"
+            )}
             onClick={() => fileInputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             <CloudUpload className="h-12 w-12 text-muted-foreground/70 mb-4" />
             <p className="font-semibold text-foreground">
