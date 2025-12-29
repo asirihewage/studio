@@ -18,7 +18,9 @@ import {
   ArrowRight,
   Trash2,
   BrainCircuit,
-  ShieldOff
+  ShieldOff,
+  RefreshCcw,
+  Pencil,
 } from "lucide-react";
 import Image from "next/image";
 import { format } from "date-fns";
@@ -82,6 +84,7 @@ export function PhotoFakeApp() {
   const [isPending, startTransition] = React.useTransition();
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
+  const [isEditing, setIsEditing] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -96,8 +99,20 @@ export function PhotoFakeApp() {
     },
   });
 
-  const { watch, setValue } = form;
+  const { watch, setValue, reset } = form;
   const watchedValues = watch();
+
+  const populateFormFromExif = (exif: ExifData | null) => {
+    if (!exif) return;
+    
+    reset({
+      phoneModel: exif.Model || "",
+      date: exif.DateTimeOriginal ? new Date(exif.DateTimeOriginal.replace(/:/, '-').replace(/:/, '-')) : new Date(),
+      time: exif.DateTimeOriginal ? format(new Date(exif.DateTimeOriginal.replace(/:/, '-').replace(/:/, '-')), "HH:mm") : format(new Date(), "HH:mm"),
+      latitude: exif.GPSLatitude ? parseFloat(exif.GPSLatitude) : 40.7128,
+      longitude: exif.GPSLongitude ? parseFloat(exif.GPSLongitude) : -74.006,
+    });
+  };
 
   const handleFileSelect = (file: File | null | undefined) => {
     if (file) {
@@ -116,40 +131,50 @@ export function PhotoFakeApp() {
       const newImageSrc = URL.createObjectURL(file);
       setImageSrc(newImageSrc);
       setModifiedImageSrc(null);
+      setIsEditing(false); // Reset to preview mode on new file
 
-      if (file.type === 'image/jpeg') {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const exifData = piexif.load(e.target?.result as string);
-                const zeroth = exifData['0th'] || {};
-                const exif = exifData['Exif'] || {};
-                const gps = exifData['GPS'] || {};
-
-                const latRef = gps[piexif.GPSIFD.GPSLatitudeRef];
-                const lat = gps[piexif.GPSIFD.GPSLatitude];
-                const lonRef = gps[piexif.GPSIFD.GPSLongitudeRef];
-                const lon = gps[piexif.GPSIFD.GPSLongitude];
-
-                const latVal = lat && latRef ? piexif.GPSHelper.dmsToDeg(lat, latRef) : undefined;
-                const lonVal = lon && lonRef ? piexif.GPSHelper.dmsToDeg(lon, lonRef) : undefined;
-
-                setExistingExif({
-                    Make: zeroth[piexif.ImageIFD.Make],
-                    Model: zeroth[piexif.ImageIFD.Model],
-                    DateTimeOriginal: exif[piexif.ExifIFD.DateTimeOriginal],
-                    CreateDate: exif[piexif.ExifIFD.CreateDate],
-                    GPSLatitude: latVal?.toFixed(4),
-                    GPSLongitude: lonVal?.toFixed(4),
-                });
-            } catch (error) {
-                setExistingExif({}); // No or invalid EXIF data
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+            const dataUrl = e.target?.result as string;
+            let exifDataToProcess = dataUrl;
+            
+            // piexif can only read from jpeg
+            if (file.type !== 'image/jpeg') {
+                setExistingExif(null); // No EXIF for non-jpeg
+                populateFormFromExif(null);
+                return;
             }
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setExistingExif(null); // PNG/AVIF don't have standard EXIF
-      }
+            
+            const exifData = piexif.load(exifDataToProcess);
+            const zeroth = exifData['0th'] || {};
+            const exif = exifData['Exif'] || {};
+            const gps = exifData['GPS'] || {};
+
+            const latRef = gps[piexif.GPSIFD.GPSLatitudeRef];
+            const lat = gps[piexif.GPSIFD.GPSLatitude];
+            const lonRef = gps[piexif.GPSIFD.GPSLongitudeRef];
+            const lon = gps[piexif.GPSIFD.GPSLongitude];
+
+            const latVal = lat && latRef ? piexif.GPSHelper.dmsToDeg(lat, latRef) : undefined;
+            const lonVal = lon && lonRef ? piexif.GPSHelper.dmsToDeg(lon, lonRef) : undefined;
+
+            const originalExif = {
+                Make: zeroth[piexif.ImageIFD.Make],
+                Model: zeroth[piexif.ImageIFD.Model],
+                DateTimeOriginal: exif[piexif.ExifIFD.DateTimeOriginal],
+                CreateDate: exif[piexif.ExifIFD.CreateDate],
+                GPSLatitude: latVal?.toFixed(4),
+                GPSLongitude: lonVal?.toFixed(4),
+            };
+            setExistingExif(originalExif);
+            populateFormFromExif(originalExif);
+          } catch (error) {
+              setExistingExif({}); // No or invalid EXIF data
+              populateFormFromExif({});
+          }
+      };
+      reader.readAsDataURL(file);
     }
   }
 
@@ -184,7 +209,8 @@ export function PhotoFakeApp() {
     setImageSrc(null);
     setModifiedImageSrc(null);
     setExistingExif(null);
-    form.reset({
+    setIsEditing(false);
+    reset({
       phoneModel: "",
       date: new Date(),
       time: format(new Date(), "HH:mm"),
@@ -196,7 +222,7 @@ export function PhotoFakeApp() {
     }
   };
   
-  const handleBackToForm = () => {
+  const handleBackToEdit = () => {
     if (modifiedImageSrc) {
         URL.revokeObjectURL(modifiedImageSrc);
     }
@@ -207,8 +233,8 @@ export function PhotoFakeApp() {
     setIsFetchingLocation(true);
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((position) => {
-            form.setValue('latitude', parseFloat(position.coords.latitude.toFixed(4)));
-            form.setValue('longitude', parseFloat(position.coords.longitude.toFixed(4)));
+            setValue('latitude', parseFloat(position.coords.latitude.toFixed(4)));
+            setValue('longitude', parseFloat(position.coords.longitude.toFixed(4)));
             toast({
                 title: "Location Updated",
                 description: "Your current location has been set.",
@@ -284,7 +310,7 @@ export function PhotoFakeApp() {
             
         const { phoneModel, date, time, latitude, longitude } = values;
         
-        const exifObj = piexif.load(imageDataUrl);
+        const exifObj = piexif.load(imageDataUrl) || {};
         exifObj['0th'] = {};
         exifObj['Exif'] = {};
         exifObj['GPS'] = {};
@@ -309,9 +335,9 @@ export function PhotoFakeApp() {
         
         if (latitude !== '' && longitude !== '') {
             exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
-            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(latitude));
+            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(Number(latitude)));
             exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
-            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
+            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(Number(longitude)));
         }
 
         const exifStr = piexif.dump(exifObj);
@@ -387,17 +413,22 @@ export function PhotoFakeApp() {
   };
   
   const handleRemoveAi = () => {
-    setValue('phoneModel', '');
+    setValue('phoneModel', 'none');
     toast({ title: 'AI footprint fields cleared' });
   };
   
   const handleRemoveAll = () => {
-    setValue('phoneModel', '');
+    setValue('phoneModel', 'none');
     setValue('latitude', '');
     setValue('longitude', '');
     setValue('date', undefined);
     setValue('time', '');
     toast({ title: 'All metadata fields cleared' });
+  };
+
+  const handleReloadMetadata = () => {
+    populateFormFromExif(existingExif);
+    toast({ title: 'Original metadata reloaded into form' });
   };
 
 
@@ -445,7 +476,7 @@ export function PhotoFakeApp() {
                     />
                 </div>
                  <CardFooter className="flex justify-between p-0 pt-6">
-                    <Button variant="outline" onClick={handleBackToForm}>
+                    <Button variant="outline" onClick={handleBackToEdit}>
                         <ChevronLeft className="mr-2 h-4 w-4" /> Back to Edit
                     </Button>
                     <Button onClick={handleDownloadImage} className="bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -466,46 +497,43 @@ export function PhotoFakeApp() {
                     style={{objectFit:"contain"}}
                 />
                 </div>
-                {imageFile?.type === 'image/jpeg' && existingExif && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Metadata Diff</CardTitle>
-                            <CardDescription>Original vs. New EXIF data.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="text-sm">
-                            <DiffRow label="Make/Model" oldValue={`${existingExif.Make || ''} ${existingExif.Model || ''}`} newValue={watchedValues.phoneModel || 'N/A'}/>
-                            <DiffRow label="Date/Time" oldValue={existingExif.DateTimeOriginal} newValue={getNewDateTime()}/>
-                            <DiffRow label="Latitude" oldValue={existingExif.GPSLatitude} newValue={String(watchedValues.latitude) || 'N/A'}/>
-                            <DiffRow label="Longitude" oldValue={existingExif.GPSLongitude} newValue={String(watchedValues.longitude) || 'N/A'}/>
-                        </CardContent>
-                    </Card>
-                )}
-                 {imageFile?.type !== 'image/jpeg' && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Metadata</CardTitle>
-                             <CardDescription>New EXIF data to be added.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="text-sm">
+                
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Metadata Diff</CardTitle>
+                        <CardDescription>
+                            {isEditing ? "Original vs. New EXIF data." : "Current EXIF data found in the image."}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-sm">
+                        {imageFile?.type !== 'image/jpeg' && !isEditing && (
                             <p className="text-xs text-muted-foreground pb-2">Your file will be converted to JPEG to support EXIF data.</p>
-                            <DiffRow label="Make/Model" oldValue="N/A" newValue={watchedValues.phoneModel || 'N/A'}/>
-                            <DiffRow label="Date/Time" oldValue="N/A" newValue={getNewDateTime()}/>
-                            <DiffRow label="Latitude" oldValue="N/A" newValue={String(watchedValues.latitude) || 'N/A'}/>
-                            <DiffRow label="Longitude" oldValue="N/A" newValue={String(watchedValues.longitude) || 'N/A'}/>
-                        </CardContent>
-                    </Card>
-                 )}
+                        )}
+                        <DiffRow label="Make/Model" oldValue={`${existingExif?.Make || 'N/A'} ${existingExif?.Model || ''}`} newValue={watchedValues.phoneModel || 'N/A'}/>
+                        <DiffRow label="Date/Time" oldValue={existingExif?.DateTimeOriginal} newValue={getNewDateTime()}/>
+                        <DiffRow label="Latitude" oldValue={existingExif?.GPSLatitude} newValue={String(watchedValues.latitude) || 'N/A'}/>
+                        <DiffRow label="Longitude" oldValue={existingExif?.GPSLongitude} newValue={String(watchedValues.longitude) || 'N/A'}/>
+                    </CardContent>
+                </Card>
+                 
+                {!isEditing && (
+                    <Button onClick={() => setIsEditing(true)} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+                        <Pencil className="mr-2 h-4 w-4" /> Edit Myself
+                    </Button>
+                )}
             </div>
+            {isEditing && (
             <div className="space-y-6">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 flex flex-col h-full">
                 <div className="grid grid-cols-1 gap-6 flex-grow">
                   <div className="space-y-2">
                       <FormLabel>Quick Actions</FormLabel>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-4 w-4" /> Privacy Traces</Button>
-                          <Button type="button" variant="outline" size="sm" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-4 w-4" /> AI Footprint</Button>
-                          <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-4 w-4" /> All Metadata</Button>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-4 w-4" /> Reload</Button>
+                          <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-4 w-4" /> Privacy</Button>
+                          <Button type="button" variant="outline" size="sm" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-4 w-4" /> AI</Button>
+                          <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-4 w-4" /> All</Button>
                       </div>
                   </div>
                   <FormField
@@ -649,6 +677,7 @@ export function PhotoFakeApp() {
               </form>
             </Form>
           </div>
+          )}
           </div>
         )}
       </CardContent>
