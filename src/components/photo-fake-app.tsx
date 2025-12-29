@@ -16,6 +16,7 @@ import {
   Calendar as CalendarIcon,
   Clock,
   LocateFixed,
+  ArrowRight,
 } from "lucide-react";
 import Image from "next/image";
 import { format } from "date-fns";
@@ -70,10 +71,20 @@ const formSchema = z.object({
     .max(180, "Must be between -180 and 180"),
 });
 
+type ExifData = {
+  Make?: string;
+  Model?: string;
+  DateTimeOriginal?: string;
+  CreateDate?: string;
+  GPSLatitude?: string;
+  GPSLongitude?: string;
+};
+
 export function PhotoFakeApp() {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imageSrc, setImageSrc] = React.useState<string | null>(null);
   const [modifiedImageSrc, setModifiedImageSrc] = React.useState<string | null>(null);
+  const [existingExif, setExistingExif] = React.useState<ExifData | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
@@ -91,6 +102,9 @@ export function PhotoFakeApp() {
     },
   });
 
+  const { watch } = form;
+  const watchedValues = watch();
+
   const handleFileSelect = (file: File | null | undefined) => {
     if (file) {
       if (!['image/jpeg'].includes(file.type)) {
@@ -105,8 +119,31 @@ export function PhotoFakeApp() {
         URL.revokeObjectURL(imageSrc);
       }
       setImageFile(file);
-      setImageSrc(URL.createObjectURL(file));
+      const newImageSrc = URL.createObjectURL(file);
+      setImageSrc(newImageSrc);
       setModifiedImageSrc(null);
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const exifData = piexif.load(e.target?.result as string);
+              const gps = exifData['GPS'] || {};
+              const lat = gps[piexif.Tag.GPS.GPSLatitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.Tag.GPS.GPSLatitude], gps[piexif.Tag.GPS.GPSLatitudeRef]) : undefined;
+              const lon = gps[piexif.Tag.GPS.GPSLongitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.Tag.GPS.GPSLongitude], gps[piexif.Tag.GPS.GPSLongitudeRef]) : undefined;
+              
+              setExistingExif({
+                  Make: exifData['0th'][piexif.Tag.Image.Make],
+                  Model: exifData['0th'][piexif.Tag.Image.Model],
+                  DateTimeOriginal: exifData['Exif'][piexif.Tag.Exif.DateTimeOriginal],
+                  CreateDate: exifData['Exif'][piexif.Tag.Exif.CreateDate],
+                  GPSLatitude: lat?.toFixed(4),
+                  GPSLongitude: lon?.toFixed(4),
+              });
+          } catch (error) {
+              setExistingExif({}); // No or invalid EXIF data
+          }
+      };
+      reader.readAsDataURL(file);
     }
   }
 
@@ -140,7 +177,14 @@ export function PhotoFakeApp() {
     setImageFile(null);
     setImageSrc(null);
     setModifiedImageSrc(null);
-    form.reset();
+    setExistingExif(null);
+    form.reset({
+      phoneModel: "",
+      date: new Date(),
+      time: format(new Date(), "HH:mm"),
+      latitude: 40.7128,
+      longitude: -74.006,
+    });
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -194,40 +238,47 @@ export function PhotoFakeApp() {
     }
     
     startTransition(() => {
-        const { phoneModel, date, time, latitude, longitude } = values;
-        const [hours, minutes] = time.split(":").map(Number);
-        const combinedDateTime = new Date(date);
-        combinedDateTime.setHours(hours, minutes, 0, 0);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const imageDataUrl = e.target?.result as string;
+            
+            const { phoneModel, date, time, latitude, longitude } = values;
+            const [hours, minutes] = time.split(":").map(Number);
+            const combinedDateTime = new Date(date);
+            combinedDateTime.setHours(hours, minutes, 0, 0);
 
-        const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
+            const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
 
-        const exif = {
-            "0th": {
-                [piexif.Tag.Image.Make]: phoneModel.split(' ')[0],
-                [piexif.Tag.Image.Model]: phoneModel,
-                [piexif.Tag.Image.Software]: "PhotoFake",
-            },
-            "Exif": {
-                [piexif.Tag.Exif.DateTimeOriginal]: formattedDateTime,
-                [piexif.Tag.Exif.CreateDate]: formattedDateTime,
-            },
-            "GPS": {
-                [piexif.Tag.GPS.GPSLatitudeRef]: latitude >= 0 ? "N" : "S",
-                [piexif.Tag.GPS.GPSLatitude]: piexif.GPSHelper.degToDms(Math.abs(latitude)),
-                [piexif.Tag.GPS.GPSLongitudeRef]: longitude >= 0 ? "E" : "W",
-                [piexif.Tag.GPS.GPSLongitude]: piexif.GPSHelper.degToDms(Math.abs(longitude)),
+            let exifObj;
+            try {
+              exifObj = piexif.load(imageDataUrl);
+            } catch (err) {
+              exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null };
             }
-        };
 
-        const exifStr = piexif.dump(exif);
-        const newImageData = piexif.insert(exifStr, imageSrc);
-        
-        setModifiedImageSrc(newImageData);
-        
-        toast({
-            title: "Success!",
-            description: "Image metadata has been updated.",
-        });
+            exifObj["0th"][piexif.Tag.Image.Make] = phoneModel.split(' ')[0];
+            exifObj["0th"][piexif.Tag.Image.Model] = phoneModel;
+            exifObj["0th"][piexif.Tag.Image.Software] = "PhotoFake";
+            
+            exifObj["Exif"][piexif.Tag.Exif.DateTimeOriginal] = formattedDateTime;
+            exifObj["Exif"][piexif.Tag.Exif.CreateDate] = formattedDateTime;
+            
+            exifObj["GPS"][piexif.Tag.GPS.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
+            exifObj["GPS"][piexif.Tag.GPS.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(latitude));
+            exifObj["GPS"][piexif.Tag.GPS.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
+            exifObj["GPS"][piexif.Tag.GPS.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
+
+            const exifStr = piexif.dump(exifObj);
+            const newImageData = piexif.insert(exifStr, imageDataUrl);
+            
+            setModifiedImageSrc(newImageData);
+            
+            toast({
+                title: "Success!",
+                description: "Image metadata has been updated. You can now download the image.",
+            });
+        };
+        reader.readAsDataURL(imageFile);
     });
   };
 
@@ -245,16 +296,37 @@ export function PhotoFakeApp() {
     link.click();
     document.body.removeChild(link);
   };
+
+  const getNewDateTime = () => {
+    const { date, time } = watchedValues;
+    if (!date || !time) return "N/A";
+    const [hours, minutes] = time.split(":").map(Number);
+    const combinedDateTime = new Date(date);
+    combinedDateTime.setHours(hours, minutes, 0, 0);
+    return format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
+  };
+
+  const DiffRow = ({ label, oldValue, newValue }: {label:string, oldValue?: string, newValue?: string}) => (
+    <div className="flex items-center justify-between py-2 border-b last:border-b-0">
+        <span className="font-medium text-sm">{label}</span>
+        <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground line-clamp-1 break-all max-w-[120px]">{oldValue || 'N/A'}</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            <span className="text-foreground font-semibold line-clamp-1 break-all max-w-[120px]">{newValue || 'N/A'}</span>
+        </div>
+    </div>
+  )
   
   React.useEffect(() => {
     return () => {
       if (imageSrc) URL.revokeObjectURL(imageSrc);
       if (modifiedImageSrc) URL.revokeObjectURL(modifiedImageSrc);
     };
-  }, [imageSrc, modifiedImageSrc]);
+  }, []);
+
 
   return (
-    <Card className="w-full max-w-2xl shadow-2xl">
+    <Card className="w-full max-w-4xl shadow-2xl">
       <CardHeader>
         <div className="flex items-center gap-3">
             <div className="bg-primary p-2 rounded-lg">
@@ -296,20 +368,58 @@ export function PhotoFakeApp() {
             />
           </div>
         )}
+        
+        {imageSrc && modifiedImageSrc && (
+            <div className="space-y-6">
+                <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                    <Image
+                        src={modifiedImageSrc}
+                        alt="Modified preview"
+                        fill
+                        style={{objectFit:"contain"}}
+                    />
+                </div>
+                 <CardFooter className="flex justify-between p-0 pt-6">
+                    <Button variant="outline" onClick={handleBackToForm}>
+                        <ChevronLeft className="mr-2 h-4 w-4" /> Back to Edit
+                    </Button>
+                    <Button onClick={handleDownloadImage} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                        <Download className="mr-2 h-4 w-4" /> Download Image
+                    </Button>
+                </CardFooter>
+            </div>
+        )}
 
         {imageSrc && !modifiedImageSrc && (
-          <div className="space-y-6">
-            <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
-              <Image
-                src={imageSrc}
-                alt="Uploaded preview"
-                fill
-                style={{objectFit:"contain"}}
-              />
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+                <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                <Image
+                    src={imageSrc}
+                    alt="Uploaded preview"
+                    fill
+                    style={{objectFit:"contain"}}
+                />
+                </div>
+                {existingExif && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Metadata Diff</CardTitle>
+                            <CardDescription>Original vs. New EXIF data.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm">
+                            <DiffRow label="Make/Model" oldValue={`${existingExif.Make || ''} ${existingExif.Model || ''}`} newValue={watchedValues.phoneModel}/>
+                            <DiffRow label="Date/Time" oldValue={existingExif.DateTimeOriginal} newValue={getNewDateTime()}/>
+                            <DiffRow label="Latitude" oldValue={existingExif.GPSLatitude} newValue={String(watchedValues.latitude)}/>
+                            <DiffRow label="Longitude" oldValue={existingExif.GPSLongitude} newValue={String(watchedValues.longitude)}/>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
+            <div className="space-y-6">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 flex flex-col h-full">
+                <div className="grid grid-cols-1 gap-6 flex-grow">
                   <FormField
                     control={form.control}
                     name="phoneModel"
@@ -394,7 +504,7 @@ export function PhotoFakeApp() {
                       )}
                     />
                   </div>
-                  <div className="col-span-1 md:col-span-2">
+                  <div className="col-span-1">
                      <div className="flex justify-between items-center mb-2">
                         <FormLabel className="flex items-center gap-2"><MapPin />Location</FormLabel>
                         <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isPending}>
@@ -435,7 +545,7 @@ export function PhotoFakeApp() {
                     </FormDescription>
                   </div>
                 </div>
-                 <CardFooter className="flex justify-between p-0 pt-8">
+                 <CardFooter className="flex justify-between p-0 pt-8 mt-auto">
                     <Button type="button" variant="ghost" onClick={handleReset} disabled={isPending}>
                     Reset
                     </Button>
@@ -443,36 +553,18 @@ export function PhotoFakeApp() {
                     {isPending ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : null}
-                    Generate & Download
+                    Apply Changes
                     </Button>
                 </CardFooter>
               </form>
             </Form>
           </div>
-        )}
-        
-        {imageSrc && modifiedImageSrc && (
-            <div className="space-y-6">
-                <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
-                    <Image
-                        src={modifiedImageSrc}
-                        alt="Modified preview"
-                        fill
-                        style={{objectFit:"contain"}}
-                    />
-                </div>
-                 <CardFooter className="flex justify-between p-0">
-                    <Button variant="outline" onClick={handleBackToForm}>
-                        <ChevronLeft className="mr-2 h-4 w-4" /> Back to Edit
-                    </Button>
-                    <Button onClick={handleDownloadImage} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                        <Download className="mr-2 h-4 w-4" /> Download Image
-                    </Button>
-                </CardFooter>
-            </div>
+          </div>
         )}
 
       </CardContent>
     </Card>
   );
 }
+
+    
