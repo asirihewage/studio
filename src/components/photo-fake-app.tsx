@@ -367,21 +367,8 @@ export function PhotoFakeApp() {
 
 
   return (
-    <Card className="w-full max-w-4xl shadow-2xl">
-      <CardHeader>
-        <div className="flex items-center gap-3">
-            <div className="bg-primary p-2 rounded-lg">
-                <Camera className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div>
-                <CardTitle className="text-2xl font-headline">ExifLab</CardTitle>
-                <CardDescription>
-                Generate realistic EXIF data for your images.
-                </CardDescription>
-            </div>
-        </div>
-      </CardHeader>
-      <CardContent>
+    <Card className="w-full max-w-4xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20">
+      <CardContent className="p-6">
         {!imageSrc && (
           <div
             className={cn(
