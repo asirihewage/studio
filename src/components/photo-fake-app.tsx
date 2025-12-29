@@ -73,28 +73,40 @@ const formSchema = z.object({
   longitude: z.union([z.coerce.number().min(-180).max(180), z.literal('')]),
 });
 
-type ExifData = { [key: string]: { [key: string]: any } };
+type ExifData = { [key: string]: { [key: number]: any } };
+
+const ALL_TAGS: { [key: string]: { [key: number]: string } } = {};
+if (piexif && piexif.TAGS) {
+    Object.keys(piexif.TAGS).forEach(ifd => {
+        ALL_TAGS[ifd] = {};
+        Object.keys(piexif.TAGS[ifd]).forEach(tagId => {
+            ALL_TAGS[ifd][parseInt(tagId)] = piexif.TAGS[ifd][tagId].name;
+        });
+    });
+}
 
 const formatExifValue = (ifd: string, tag: string, value: any): string => {
     if (value === undefined || value === null) return 'N/A';
   
-    // GPS rational values (arrays)
     if (ifd === 'GPS' && Array.isArray(value) && value.length > 0 && Array.isArray(value[0])) {
       return value.map((dms: [number, number]) => `${(dms[0]/dms[1]).toFixed(2)}`).join(', ');
     }
     
-    // Other rational values
     if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'number' && value[1] !== 0) {
+        if (tag === 'ExposureTime' && value[0] === 1) return `1/${value[1]}`;
         return `f/${(value[0] / value[1]).toFixed(1)}`;
     }
 
     if (typeof value === 'string') {
-        // Clean up unprintable characters
         return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
     }
   
     if (typeof value === 'object') {
-        return JSON.stringify(value);
+        try {
+            return JSON.stringify(value);
+        } catch {
+            return '[Circular Object]';
+        }
     }
 
     return String(value);
@@ -117,10 +129,10 @@ export function PhotoFakeApp() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       deviceModel: "none",
-      date: new Date(),
-      time: format(new Date(), "HH:mm"),
-      latitude: 40.7128,
-      longitude: -74.006,
+      date: undefined,
+      time: "",
+      latitude: '',
+      longitude: '',
     },
   });
 
@@ -150,15 +162,40 @@ export function PhotoFakeApp() {
     const lonRef = gps[piexif.GPSIFD.GPSLongitudeRef];
     const lon = gps[piexif.GPSIFD.GPSLongitude];
 
-    const latVal = lat && latRef ? piexif.GPSHelper.dmsToDeg(lat, latRef) : undefined;
-    const lonVal = lon && lonRef ? piexif.GPSHelper.dmsToDeg(lon, lonRef) : undefined;
+    let latVal: number | '' = '';
+    let lonVal: number | '' = '';
+
+    try {
+        if (lat && latRef) {
+            latVal = parseFloat(piexif.GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
+        }
+        if (lon && lonRef) {
+            lonVal = parseFloat(piexif.GPSHelper.dmsToDeg(lon, lonRef).toFixed(4));
+        }
+    } catch(e) {
+        console.error("Could not parse GPS coordinates from EXIF", e)
+    }
+
+    let dateVal: Date | undefined = undefined;
+    let timeVal: string = '';
+    if (dateTime) {
+        try {
+            const parsedDate = new Date(dateTime.replace(/:/, '-').replace(/:/, '-'));
+            if (!isNaN(parsedDate.getTime())) {
+                dateVal = parsedDate;
+                timeVal = format(parsedDate, "HH:mm");
+            }
+        } catch (e) {
+            console.error("Could not parse date from EXIF", e);
+        }
+    }
     
     reset({
       deviceModel: model || "none",
-      date: dateTime ? new Date(dateTime.replace(/:/, '-').replace(/:/, '-')) : new Date(),
-      time: dateTime ? format(new Date(dateTime.replace(/:/, '-').replace(/:/, '-')), "HH:mm") : format(new Date(), "HH:mm"),
-      latitude: latVal !== undefined ? parseFloat(latVal.toFixed(4)) : '',
-      longitude: lonVal !== undefined ? parseFloat(lonVal.toFixed(4)) : '',
+      date: dateVal,
+      time: timeVal,
+      latitude: latVal,
+      longitude: lonVal,
     });
   };
 
@@ -240,8 +277,8 @@ export function PhotoFakeApp() {
       deviceModel: "none",
       date: new Date(),
       time: format(new Date(), "HH:mm"),
-      latitude: 40.7128,
-      longitude: -74.006,
+      latitude: '',
+      longitude: '',
     });
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -369,10 +406,19 @@ export function PhotoFakeApp() {
       }
       
       if (latitude !== '' && longitude !== '') {
-          exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = Number(latitude) >= 0 ? "N" : "S";
-          exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(Number(latitude)));
-          exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = Number(longitude) >= 0 ? "E" : "W";
-          exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(Number(longitude)));
+          try {
+            exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = Number(latitude) >= 0 ? "N" : "S";
+            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(Number(latitude)));
+            exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = Number(longitude) >= 0 ? "E" : "W";
+            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(Number(longitude)));
+          } catch (e) {
+            console.error("Error converting GPS coordinates:", e)
+             toast({
+                variant: "destructive",
+                title: "GPS Error",
+                description: "Could not process GPS coordinates. They may be invalid.",
+             });
+          }
       }
 
       const exifStr = piexif.dump(exifObj);
@@ -413,26 +459,75 @@ export function PhotoFakeApp() {
     link.click();
     document.body.removeChild(link);
   };
+  
+  const DiffRow = ({ label, oldValue, newValue }: {label:string, oldValue?: string | null, newValue?: string | null}) => {
+    const displayOld = oldValue || 'N/A';
+    const displayNew = newValue || 'N/A';
+    if (displayOld === displayNew) return null;
 
-  const getNewDateTime = () => {
-    const { date, time } = watchedValues;
-    if (!date || !time) return "N/A";
-    const [hours, minutes] = time.split(":").map(Number);
-    const combinedDateTime = new Date(date);
-    combinedDateTime.setHours(hours, minutes, 0, 0);
-    return format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
-  };
-
-  const DiffRow = ({ label, oldValue, newValue }: {label:string, oldValue?: string, newValue?: string}) => (
-    <div className="flex items-center justify-between py-2 border-b last:border-b-0">
-        <span className="font-medium text-sm">{label}</span>
-        <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground line-clamp-1 break-all max-w-[120px]">{oldValue || 'N/A'}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <span className="text-foreground font-semibold line-clamp-1 break-all max-w-[120px]">{newValue || 'N/A'}</span>
+    return (
+        <div className="flex items-center justify-between py-2 border-b last:border-b-0 text-sm">
+            <span className="font-medium text-muted-foreground">{label}</span>
+            <div className="flex items-center gap-2 text-right">
+                <span className="text-foreground font-semibold line-clamp-1 break-all max-w-[150px]">{displayNew}</span>
+            </div>
         </div>
-    </div>
-  )
+    )
+  }
+
+  const ChangesSummary = () => {
+    const { deviceModel, date, time, latitude, longitude } = watchedValues;
+    const oldExif = existingExif || { '0th': {}, Exif: {}, GPS: {} };
+    const oldModel = oldExif['0th']?.[piexif.ImageIFD.Model] || 'N/A';
+    const oldDateTime = oldExif['Exif']?.[piexif.ExifIFD.DateTimeOriginal] || 'N/A';
+
+    let oldLat = 'N/A';
+    let oldLon = 'N/A';
+    const latRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitudeRef];
+    const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
+    const lonRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitudeRef];
+    const lon = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitude];
+    if (lat && latRef) oldLat = piexif.GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
+    if (lon && lonRef) oldLon = piexif.GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
+    const oldLocation = (lat && lon) ? `${oldLat}, ${oldLon}` : 'N/A';
+
+    const newModel = deviceModel !== 'none' ? deviceModel : "REMOVED";
+    
+    let newDateTime = "N/A";
+    if (date && time) {
+        const [hours, minutes] = time.split(":").map(Number);
+        const combinedDateTime = new Date(date);
+        combinedDateTime.setHours(hours, minutes, 0, 0);
+        newDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
+    } else if (!date && !time) {
+        newDateTime = "REMOVED";
+    }
+
+    const newLocation = (latitude !== '' && longitude !== '') ? `${latitude}, ${longitude}` : 'REMOVED';
+
+    const hasChanges = newModel !== oldModel || newDateTime !== oldDateTime || newLocation !== oldLocation;
+
+    if (!hasChanges) {
+        return (
+            <div className="p-3 text-center text-sm text-muted-foreground border rounded-lg">
+                <p>Make a change to see a summary here.</p>
+            </div>
+        )
+    }
+
+    return (
+        <Card className="bg-background/50">
+            <CardHeader className="p-4">
+                <CardTitle className="text-base">Changes Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+                <DiffRow label="Device Model" oldValue={oldModel} newValue={newModel} />
+                <DiffRow label="Date/Time" oldValue={oldDateTime} newValue={newDateTime} />
+                <DiffRow label="Location" oldValue={oldLocation} newValue={newLocation} />
+            </CardContent>
+        </Card>
+    );
+  };
   
   React.useEffect(() => {
     return () => {
@@ -447,13 +542,13 @@ export function PhotoFakeApp() {
     setValue('date', undefined);
     setValue('time', '');
     toast({ title: 'Privacy fields cleared' });
-    applyChanges(getValues());
+    form.handleSubmit(applyChanges)();
   };
   
   const handleRemoveAi = () => {
     setValue('deviceModel', 'none');
     toast({ title: 'AI footprint fields cleared' });
-    applyChanges(getValues());
+    form.handleSubmit(applyChanges)();
   };
   
   const handleRemoveAll = () => {
@@ -474,7 +569,7 @@ export function PhotoFakeApp() {
     if (!existingExif) {
       return <p className="text-sm text-muted-foreground p-4">No EXIF data found in this image.</p>;
     }
-    const ifdOrder = ['0th', 'Exif', 'GPS', '1st', 'thumbnail'];
+    const ifdOrder = ['0th', 'Exif', 'GPS', '1st'];
     
     return (
         <ScrollArea className="h-[280px] w-full rounded-md border p-4">
@@ -483,19 +578,20 @@ export function PhotoFakeApp() {
                 const ifdData = existingExif[ifdName];
                 if (!ifdData || Object.keys(ifdData).length === 0) return null;
 
-                const tagNames: { [key: string]: string } = (piexif as any)[`${ifdName.toUpperCase()}IFD`] || {};
-
+                const tagNames: { [key: number]: string } = (ALL_TAGS as any)[ifdName] || {};
+                
                 return (
                     <div key={ifdName}>
                         <h4 className="font-semibold text-sm capitalize mb-2">{ifdName} IFD</h4>
                         <div className="space-y-1 text-xs">
-                        {Object.keys(ifdData).map(tagId => {
+                        {Object.keys(ifdData).map(tagIdStr => {
+                             const tagId = parseInt(tagIdStr);
                              const tagName = tagNames[tagId] || `Unknown (${tagId})`;
                              const value = ifdData[tagId];
                              if (ifdName === 'thumbnail') return null; // Don't display thumbnail data
                              return (
-                                 <div key={tagId} className="flex justify-between items-center">
-                                     <span className="text-muted-foreground">{tagName}</span>
+                                 <div key={tagId} className="flex justify-between items-center gap-2">
+                                     <span className="text-muted-foreground truncate">{tagName}</span>
                                      <span className="font-mono text-right break-all">{formatExifValue(ifdName, tagName, value)}</span>
                                  </div>
                              )
@@ -631,7 +727,7 @@ export function PhotoFakeApp() {
                     </div>
                     
                     {isEditing && (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             <Form {...form}>
                                 <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-3 flex flex-col">
                                     <div className="space-y-2">
@@ -729,6 +825,9 @@ export function PhotoFakeApp() {
                                         </div>
                                         <FormDescription className="mt-2">e.g., New York: 40.7128, -74.0060</FormDescription>
                                     </div>
+
+                                    <ChangesSummary />
+
                                     <CardFooter className="flex justify-end p-0 pt-4 gap-2">
                                         <Button onClick={() => setIsEditing(false)} variant="ghost">
                                             Cancel
@@ -747,3 +846,5 @@ export function PhotoFakeApp() {
     </Card>
   );
 }
+
+    
