@@ -14,6 +14,7 @@ import {
   Smartphone,
   Calendar as CalendarIcon,
   Clock,
+  LocateFixed,
 } from "lucide-react";
 import Image from "next/image";
 import { format } from "date-fns";
@@ -46,7 +47,6 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { ANDROID_PHONE_MODELS } from "@/lib/constants";
-import { generateExifAction } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
@@ -69,11 +69,35 @@ const formSchema = z.object({
     .max(180, "Must be between -180 and 180"),
 });
 
+function generateExifData(values: z.infer<typeof formSchema>): string {
+    const { phoneModel, date, time, latitude, longitude } = values;
+    const [hours, minutes] = time.split(":").map(Number);
+    const combinedDateTime = new Date(date);
+    combinedDateTime.setHours(hours, minutes, 0, 0);
+
+    const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
+
+    // Basic EXIF structure
+    const exifData = `
+Make: ${phoneModel.split(' ')[0]}
+Model: ${phoneModel}
+DateTimeOriginal: ${formattedDateTime}
+GPSLatitude: ${latitude}
+GPSLatitudeRef: ${latitude >= 0 ? 'N' : 'S'}
+GPSLongitude: ${longitude}
+GPSLongitudeRef: ${longitude >= 0 ? 'E' : 'W'}
+    `.trim();
+
+    return exifData;
+}
+
+
 export function PhotoFakeApp() {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imageSrc, setImageSrc] = React.useState<string | null>(null);
   const [exifData, setExifData] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
+  const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -116,6 +140,36 @@ export function PhotoFakeApp() {
   const handleBackToForm = () => {
     setExifData(null);
   }
+  
+  const handleFetchLocation = () => {
+    setIsFetchingLocation(true);
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+            form.setValue('latitude', position.coords.latitude);
+            form.setValue('longitude', position.coords.longitude);
+            toast({
+                title: "Location Updated",
+                description: "Your current location has been set.",
+            });
+            setIsFetchingLocation(false);
+        }, (error) => {
+            toast({
+                variant: 'destructive',
+                title: "Location Error",
+                description: "Could not fetch location. Please enable location services.",
+            });
+            setIsFetchingLocation(false);
+        });
+    } else {
+        toast({
+            variant: 'destructive',
+            title: "Geolocation Not Supported",
+            description: "Your browser does not support geolocation.",
+        });
+        setIsFetchingLocation(false);
+    }
+  };
+
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     if (!imageFile) {
@@ -126,32 +180,14 @@ export function PhotoFakeApp() {
       });
       return;
     }
-
-    const { date, time, ...rest } = values;
-    const [hours, minutes] = time.split(":").map(Number);
-    const combinedDateTime = new Date(date);
-    combinedDateTime.setHours(hours, minutes, 0, 0);
-
-    const actionValues = {
-      ...rest,
-      dateTime: combinedDateTime.toISOString(),
-    };
-
-    startTransition(async () => {
-      const result = await generateExifAction(actionValues);
-      if (result.success) {
-        setExifData(result.data);
+    
+    startTransition(() => {
+        const result = generateExifData(values);
+        setExifData(result);
         toast({
-          title: "Success!",
-          description: "Realistic EXIF data has been generated.",
+            title: "Success!",
+            description: "Realistic EXIF data has been generated.",
         });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Generation Failed",
-          description: result.error,
-        });
-      }
     });
   };
 
@@ -220,7 +256,7 @@ export function PhotoFakeApp() {
               <Image
                 src={imageSrc}
                 alt="Uploaded preview"
-                layout="fill"
+                fill
                 objectFit="contain"
               />
             </div>
@@ -311,37 +347,48 @@ export function PhotoFakeApp() {
                       )}
                     />
                   </div>
-                  <FormField
-                    control={form.control}
-                    name="latitude"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center gap-2"><MapPin />Latitude</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.0001" {...field} disabled={isPending}/>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="longitude"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center gap-2"><MapPin />Longitude</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.0001" {...field} disabled={isPending}/>
-                        </FormControl>
-                         <FormDescription>
-                          e.g., New York: 40.7128, -74.0060
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="col-span-1 md:col-span-2">
+                     <div className="flex justify-between items-center mb-2">
+                        <FormLabel className="flex items-center gap-2"><MapPin />Location</FormLabel>
+                        <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isPending}>
+                            {isFetchingLocation ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LocateFixed className="mr-2 h-4 w-4" />}
+                            Use my location
+                        </Button>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                            control={form.control}
+                            name="latitude"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="text-xs text-muted-foreground">Latitude</FormLabel>
+                                <FormControl>
+                                <Input type="number" step="0.0001" {...field} disabled={isPending}/>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="longitude"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="text-xs text-muted-foreground">Longitude</FormLabel>
+                                <FormControl>
+                                <Input type="number" step="0.0001" {...field} disabled={isPending}/>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                     </div>
+                     <FormDescription className="mt-2">
+                        e.g., New York: 40.7128, -74.0060
+                    </FormDescription>
+                  </div>
                 </div>
-                 <CardFooter className="flex justify-between p-0">
+                 <CardFooter className="flex justify-between p-0 pt-8">
                     <Button type="button" variant="ghost" onClick={handleReset} disabled={isPending}>
                     Reset
                     </Button>
