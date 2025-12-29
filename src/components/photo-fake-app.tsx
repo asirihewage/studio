@@ -166,10 +166,10 @@ export function PhotoFakeApp() {
     let lonVal: number | '' = '';
 
     try {
-        if (lat && latRef) {
+        if (lat && latRef && piexif.GPSHelper) {
             latVal = parseFloat(piexif.GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
         }
-        if (lon && lonRef) {
+        if (lon && lonRef && piexif.GPSHelper) {
             lonVal = parseFloat(piexif.GPSHelper.dmsToDeg(lon, lonRef).toFixed(4));
         }
     } catch(e) {
@@ -405,7 +405,7 @@ export function PhotoFakeApp() {
         delete exifObj["Exif"][piexif.ExifIFD.CreateDate];
       }
       
-      if (latitude !== '' && longitude !== '') {
+      if (latitude !== '' && longitude !== '' && piexif.GPSHelper) {
           try {
             exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = Number(latitude) >= 0 ? "N" : "S";
             exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(Number(latitude)));
@@ -483,13 +483,15 @@ export function PhotoFakeApp() {
 
     let oldLat = 'N/A';
     let oldLon = 'N/A';
-    const latRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitudeRef];
-    const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
-    const lonRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitudeRef];
-    const lon = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitude];
-    if (lat && latRef) oldLat = piexif.GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
-    if (lon && lonRef) oldLon = piexif.GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
-    const oldLocation = (lat && lon) ? `${oldLat}, ${oldLon}` : 'N/A';
+    if (piexif.GPSHelper) {
+        const latRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitudeRef];
+        const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
+        const lonRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitudeRef];
+        const lon = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitude];
+        if (lat && latRef) oldLat = piexif.GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
+        if (lon && lonRef) oldLon = piexif.GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
+    }
+    const oldLocation = (oldLat !== 'N/A' && oldLon !== 'N/A') ? `${oldLat}, ${oldLon}` : 'N/A';
 
     const newModel = deviceModel !== 'none' ? deviceModel : "REMOVED";
     
@@ -612,29 +614,33 @@ export function PhotoFakeApp() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3 }}
-            className={cn(
-                "flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors h-full",
-                isDragging && "bg-primary/10 border-primary"
-            )}
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            className="flex h-full items-center justify-center"
         >
-            <CloudUpload className={cn("h-12 w-12 text-muted-foreground/70 mb-4 transition-transform", isDragging && "scale-110")} />
-            <p className="font-semibold text-foreground">
-                Click to upload or drag & drop
-            </p>
-            <p className="text-sm text-muted-foreground">
-                JPG/JPEG, PNG, or AVIF files
-            </p>
-            <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept="image/jpeg,image/png,image/avif"
-            />
+            <div
+                className={cn(
+                    "flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors w-full max-w-lg",
+                    isDragging && "bg-primary/10 border-primary"
+                )}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
+                <CloudUpload className={cn("h-12 w-12 text-muted-foreground/70 mb-4 transition-transform", isDragging && "scale-110")} />
+                <p className="font-semibold text-foreground">
+                    Click to upload or drag & drop
+                </p>
+                <p className="text-sm text-muted-foreground">
+                    JPG/JPEG, PNG, or AVIF files
+                </p>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept="image/jpeg,image/png,image/avif"
+                />
+            </div>
         </motion.div>
     );
   }
@@ -724,6 +730,9 @@ export function PhotoFakeApp() {
                                 </Button>
                             </>
                         )}
+                         {isEditing && (
+                            <ChangesSummary />
+                         )}
                     </div>
                     
                     {isEditing && (
@@ -825,8 +834,6 @@ export function PhotoFakeApp() {
                                         </div>
                                         <FormDescription className="mt-2">e.g., New York: 40.7128, -74.0060</FormDescription>
                                     </div>
-
-                                    <ChangesSummary />
 
                                     <CardFooter className="flex justify-end p-0 pt-4 gap-2">
                                         <Button onClick={() => setIsEditing(false)} variant="ghost">
