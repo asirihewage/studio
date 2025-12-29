@@ -107,11 +107,11 @@ export function PhotoFakeApp() {
 
   const handleFileSelect = (file: File | null | undefined) => {
     if (file) {
-      if (!['image/jpeg'].includes(file.type)) {
+      if (!['image/jpeg', 'image/png'].includes(file.type)) {
         toast({
             variant: 'destructive',
             title: 'Invalid File Type',
-            description: 'Please upload a JPG/JPEG file. EXIF data is only supported for this format.',
+            description: 'Please upload a JPG/JPEG or PNG file.',
         });
         return;
       }
@@ -357,14 +357,14 @@ export function PhotoFakeApp() {
               Click to upload or drag & drop
             </p>
             <p className="text-sm text-muted-foreground">
-              JPG/JPEG files only
+              JPG/JPEG or PNG files
             </p>
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept="image/jpeg"
+              accept="image/jpeg,image/png"
             />
           </div>
         )}
@@ -566,5 +566,3 @@ export function PhotoFakeApp() {
     </Card>
   );
 }
-
-    
