@@ -107,11 +107,11 @@ export function PhotoFakeApp() {
 
   const handleFileSelect = (file: File | null | undefined) => {
     if (file) {
-      if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      if (!['image/jpeg', 'image/png', 'image/avif'].includes(file.type)) {
         toast({
             variant: 'destructive',
             title: 'Invalid File Type',
-            description: 'Please upload a JPG/JPEG or PNG file.',
+            description: 'Please upload a JPG/JPEG, PNG or AVIF file.',
         });
         return;
       }
@@ -123,27 +123,31 @@ export function PhotoFakeApp() {
       setImageSrc(newImageSrc);
       setModifiedImageSrc(null);
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-          try {
-              const exifData = piexif.load(e.target?.result as string);
-              const gps = exifData['GPS'] || {};
-              const lat = gps[piexif.Tag.GPS.GPSLatitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.Tag.GPS.GPSLatitude], gps[piexif.Tag.GPS.GPSLatitudeRef]) : undefined;
-              const lon = gps[piexif.Tag.GPS.GPSLongitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.Tag.GPS.GPSLongitude], gps[piexif.Tag.GPS.GPSLongitudeRef]) : undefined;
-              
-              setExistingExif({
-                  Make: exifData['0th'][piexif.Tag.Image.Make],
-                  Model: exifData['0th'][piexif.Tag.Image.Model],
-                  DateTimeOriginal: exifData['Exif'][piexif.Tag.Exif.DateTimeOriginal],
-                  CreateDate: exifData['Exif'][piexif.Tag.Exif.CreateDate],
-                  GPSLatitude: lat?.toFixed(4),
-                  GPSLongitude: lon?.toFixed(4),
-              });
-          } catch (error) {
-              setExistingExif({}); // No or invalid EXIF data
-          }
-      };
-      reader.readAsDataURL(file);
+      if (file.type === 'image/jpeg') {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const exifData = piexif.load(e.target?.result as string);
+                const gps = exifData['GPS'] || {};
+                const lat = gps[piexif.Tag.GPS.GPSLatitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.Tag.GPS.GPSLatitude], gps[piexif.Tag.GPS.GPSLatitudeRef]) : undefined;
+                const lon = gps[piexif.Tag.GPS.GPSLongitude] ? piexif.GPSHelper.dmsToDeg(gps[piexif.Tag.GPS.GPSLongitude], gps[piexif.Tag.GPS.GPSLongitudeRef]) : undefined;
+                
+                setExistingExif({
+                    Make: exifData['0th'][piexif.Tag.Image.Make],
+                    Model: exifData['0th'][piexif.Tag.Image.Model],
+                    DateTimeOriginal: exifData['Exif'][piexif.Tag.Exif.DateTimeOriginal],
+                    CreateDate: exifData['Exif'][piexif.Tag.Exif.CreateDate],
+                    GPSLatitude: lat?.toFixed(4),
+                    GPSLongitude: lon?.toFixed(4),
+                });
+            } catch (error) {
+                setExistingExif({}); // No or invalid EXIF data
+            }
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setExistingExif(null); // PNG/AVIF don't have standard EXIF
+      }
     }
   }
 
@@ -226,8 +230,33 @@ export function PhotoFakeApp() {
     }
   };
 
+  const convertToJpegDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = document.createElement('img');
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg'));
+          } else {
+            reject(new Error("Could not get canvas context"));
+          }
+        };
+        img.onerror = reject;
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!imageFile || !imageSrc) {
       toast({
         variant: "destructive",
@@ -237,48 +266,64 @@ export function PhotoFakeApp() {
       return;
     }
     
-    startTransition(() => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const imageDataUrl = e.target?.result as string;
+    startTransition(async () => {
+      try {
+        let imageDataUrl: string;
+        if (imageFile.type === 'image/jpeg') {
+          imageDataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target?.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(imageFile);
+          });
+        } else {
+          imageDataUrl = await convertToJpegDataUrl(imageFile);
+        }
             
-            const { phoneModel, date, time, latitude, longitude } = values;
-            const [hours, minutes] = time.split(":").map(Number);
-            const combinedDateTime = new Date(date);
-            combinedDateTime.setHours(hours, minutes, 0, 0);
+        const { phoneModel, date, time, latitude, longitude } = values;
+        const [hours, minutes] = time.split(":").map(Number);
+        const combinedDateTime = new Date(date);
+        combinedDateTime.setHours(hours, minutes, 0, 0);
 
-            const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
+        const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
 
-            let exifObj;
-            try {
-              exifObj = piexif.load(imageDataUrl);
-            } catch (err) {
-              exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null };
-            }
+        let exifObj;
+        try {
+          // piexifjs can only load from JPEG
+          exifObj = piexif.load(imageDataUrl);
+        } catch (err) {
+          exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null };
+        }
 
-            exifObj["0th"][piexif.Tag.Image.Make] = phoneModel.split(' ')[0];
-            exifObj["0th"][piexif.Tag.Image.Model] = phoneModel;
-            exifObj["0th"][piexif.Tag.Image.Software] = "ExifLab";
-            
-            exifObj["Exif"][piexif.Tag.Exif.DateTimeOriginal] = formattedDateTime;
-            exifObj["Exif"][piexif.Tag.Exif.CreateDate] = formattedDateTime;
-            
-            exifObj["GPS"][piexif.Tag.GPS.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
-            exifObj["GPS"][piexif.Tag.GPS.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(latitude));
-            exifObj["GPS"][piexif.Tag.GPS.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
-            exifObj["GPS"][piexif.Tag.GPS.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
+        exifObj["0th"][piexif.Tag.Image.Make] = phoneModel.split(' ')[0];
+        exifObj["0th"][piexif.Tag.Image.Model] = phoneModel;
+        exifObj["0th"][piexif.Tag.Image.Software] = "ExifLab";
+        
+        exifObj["Exif"][piexif.Tag.Exif.DateTimeOriginal] = formattedDateTime;
+        exifObj["Exif"][piexif.Tag.Exif.CreateDate] = formattedDateTime;
+        
+        exifObj["GPS"][piexif.Tag.GPS.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
+        exifObj["GPS"][piexif.Tag.GPS.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(latitude));
+        exifObj["GPS"][piexif.Tag.GPS.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
+        exifObj["GPS"][piexif.Tag.GPS.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
 
-            const exifStr = piexif.dump(exifObj);
-            const newImageData = piexif.insert(exifStr, imageDataUrl);
-            
-            setModifiedImageSrc(newImageData);
-            
-            toast({
-                title: "Success!",
-                description: "Image metadata has been updated. You can now download the image.",
-            });
-        };
-        reader.readAsDataURL(imageFile);
+        const exifStr = piexif.dump(exifObj);
+        const newImageData = piexif.insert(exifStr, imageDataUrl);
+        
+        setModifiedImageSrc(newImageData);
+        
+        toast({
+            title: "Success!",
+            description: "Image metadata has been updated. You can now download the image.",
+        });
+      } catch (error) {
+        console.error("Error processing image:", error);
+        toast({
+          variant: "destructive",
+          title: "Processing Error",
+          description: "Could not process the image. It might be corrupted or in an unsupported format.",
+        });
+      }
     });
   };
 
@@ -289,8 +334,8 @@ export function PhotoFakeApp() {
     link.href = modifiedImageSrc;
 
     const name = imageFile.name.substring(0, imageFile.name.lastIndexOf('.'));
-    const ext = imageFile.name.substring(imageFile.name.lastIndexOf('.'));
-    link.download = `${name}_exiflab${ext}`;
+    // The downloaded file will be a jpeg
+    link.download = `${name}_exiflab.jpeg`;
     
     document.body.appendChild(link);
     link.click();
@@ -357,14 +402,14 @@ export function PhotoFakeApp() {
               Click to upload or drag & drop
             </p>
             <p className="text-sm text-muted-foreground">
-              JPG/JPEG or PNG files
+              JPG/JPEG, PNG, or AVIF files
             </p>
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept="image/jpeg,image/png"
+              accept="image/jpeg,image/png,image/avif"
             />
           </div>
         )}
@@ -401,7 +446,7 @@ export function PhotoFakeApp() {
                     style={{objectFit:"contain"}}
                 />
                 </div>
-                {existingExif && (
+                {imageFile?.type === 'image/jpeg' && existingExif && (
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-lg">Metadata Diff</CardTitle>
@@ -415,6 +460,21 @@ export function PhotoFakeApp() {
                         </CardContent>
                     </Card>
                 )}
+                 {imageFile?.type !== 'image/jpeg' && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Metadata</CardTitle>
+                             <CardDescription>New EXIF data to be added.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-sm">
+                            <p className="text-xs text-muted-foreground pb-2">Your file will be converted to JPEG to support EXIF data.</p>
+                            <DiffRow label="Make/Model" oldValue="N/A" newValue={watchedValues.phoneModel}/>
+                            <DiffRow label="Date/Time" oldValue="N/A" newValue={getNewDateTime()}/>
+                            <DiffRow label="Latitude" oldValue="N/A" newValue={String(watchedValues.latitude)}/>
+                            <DiffRow label="Longitude" oldValue="N/A" newValue={String(watchedValues.longitude)}/>
+                        </CardContent>
+                    </Card>
+                 )}
             </div>
             <div className="space-y-6">
             <Form {...form}>
