@@ -164,13 +164,14 @@ export function PhotoFakeApp() {
 
     let latVal: number | '' = '';
     let lonVal: number | '' = '';
-
+    
+    const GPSHelper = (piexif as any).GPSHelper;
     try {
-        if (lat && latRef && piexif.GPSHelper) {
-            latVal = parseFloat(piexif.GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
+        if (lat && latRef && GPSHelper) {
+            latVal = parseFloat(GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
         }
-        if (lon && lonRef && piexif.GPSHelper) {
-            lonVal = parseFloat(piexif.GPSHelper.dmsToDeg(lon, lonRef).toFixed(4));
+        if (lon && lonRef && GPSHelper) {
+            lonVal = parseFloat(GPSHelper.dmsToDeg(lon, lonRef).toFixed(4));
         }
     } catch(e) {
         console.error("Could not parse GPS coordinates from EXIF", e)
@@ -405,12 +406,13 @@ export function PhotoFakeApp() {
         delete exifObj["Exif"][piexif.ExifIFD.CreateDate];
       }
       
-      if (latitude !== '' && longitude !== '' && piexif.GPSHelper) {
+      const GPSHelper = (piexif as any).GPSHelper;
+      if (latitude !== '' && longitude !== '' && GPSHelper) {
           try {
             exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = Number(latitude) >= 0 ? "N" : "S";
-            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(Number(latitude)));
+            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = GPSHelper.degToDms(Math.abs(Number(latitude)));
             exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = Number(longitude) >= 0 ? "E" : "W";
-            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(Number(longitude)));
+            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = GPSHelper.degToDms(Math.abs(Number(longitude)));
           } catch (e) {
             console.error("Error converting GPS coordinates:", e)
              toast({
@@ -480,16 +482,17 @@ export function PhotoFakeApp() {
     const oldExif = existingExif || { '0th': {}, Exif: {}, GPS: {} };
     const oldModel = oldExif['0th']?.[piexif.ImageIFD.Model] || 'N/A';
     const oldDateTime = oldExif['Exif']?.[piexif.ExifIFD.DateTimeOriginal] || 'N/A';
-
+    
+    const GPSHelper = (piexif as any).GPSHelper;
     let oldLat = 'N/A';
     let oldLon = 'N/A';
-    if (piexif.GPSHelper) {
+    if (GPSHelper) {
         const latRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitudeRef];
         const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
         const lonRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitudeRef];
         const lon = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitude];
-        if (lat && latRef) oldLat = piexif.GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
-        if (lon && lonRef) oldLon = piexif.GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
+        if (lat && latRef) oldLat = GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
+        if (lon && lonRef) oldLon = GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
     }
     const oldLocation = (oldLat !== 'N/A' && oldLon !== 'N/A') ? `${oldLat}, ${oldLon}` : 'N/A';
 
