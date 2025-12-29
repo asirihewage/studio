@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -21,9 +22,11 @@ import {
   ShieldOff,
   RefreshCcw,
   Pencil,
+  Wand,
 } from "lucide-react";
 import Image from "next/image";
 import { format } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -81,7 +84,7 @@ export function PhotoFakeApp() {
   const [imageSrc, setImageSrc] = React.useState<string | null>(null);
   const [modifiedImageSrc, setModifiedImageSrc] = React.useState<string | null>(null);
   const [existingExif, setExistingExif] = React.useState<ExifData | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [isProcessing, setIsProcessing] = React.useState(false);
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
@@ -99,11 +102,20 @@ export function PhotoFakeApp() {
     },
   });
 
-  const { watch, setValue, reset } = form;
+  const { watch, setValue, reset, getValues } = form;
   const watchedValues = watch();
 
   const populateFormFromExif = (exif: ExifData | null) => {
-    if (!exif) return;
+    if (!exif) {
+      reset({
+        phoneModel: "none",
+        date: undefined,
+        time: '',
+        latitude: '',
+        longitude: '',
+      });
+      return;
+    };
     
     reset({
       phoneModel: exif.Model || "",
@@ -139,9 +151,8 @@ export function PhotoFakeApp() {
             const dataUrl = e.target?.result as string;
             let exifDataToProcess = dataUrl;
             
-            // piexif can only read from jpeg
             if (file.type !== 'image/jpeg') {
-                setExistingExif(null); // No EXIF for non-jpeg
+                setExistingExif(null);
                 populateFormFromExif(null);
                 return;
             }
@@ -160,18 +171,18 @@ export function PhotoFakeApp() {
             const lonVal = lon && lonRef ? piexif.GPSHelper.dmsToDeg(lon, lonRef) : undefined;
 
             const originalExif = {
-                Make: zeroth[piexif.ImageIFD.Make],
-                Model: zeroth[piexif.ImageIFD.Model],
-                DateTimeOriginal: exif[piexif.ExifIFD.DateTimeOriginal],
-                CreateDate: exif[piexif.ExifIFD.CreateDate],
+                Make: zeroth[piexif.ImageIFD.Make] as string | undefined,
+                Model: zeroth[piexif.ImageIFD.Model] as string | undefined,
+                DateTimeOriginal: exif[piexif.ExifIFD.DateTimeOriginal] as string | undefined,
+                CreateDate: exif[piexif.ExifIFD.CreateDate] as string | undefined,
                 GPSLatitude: latVal?.toFixed(4),
                 GPSLongitude: lonVal?.toFixed(4),
             };
             setExistingExif(originalExif);
             populateFormFromExif(originalExif);
           } catch (error) {
-              setExistingExif({}); // No or invalid EXIF data
-              populateFormFromExif({});
+              setExistingExif(null);
+              populateFormFromExif(null);
           }
       };
       reader.readAsDataURL(file);
@@ -283,84 +294,92 @@ export function PhotoFakeApp() {
     });
   };
 
+  const applyChanges = React.useCallback(async (values: z.infer<typeof formSchema>) => {
+    if (!imageFile || !imageSrc) return;
+    setIsProcessing(true);
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!imageFile || !imageSrc) {
+    try {
+      let imageDataUrl: string;
+      if (imageFile.type === 'image/jpeg') {
+        imageDataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(imageFile);
+        });
+      } else {
+        imageDataUrl = await convertToJpegDataUrl(imageFile);
+      }
+          
+      const { phoneModel, date, time, latitude, longitude } = values;
+      
+      const exifObj = piexif.load(imageDataUrl) || {};
+      exifObj['0th'] = {};
+      exifObj['Exif'] = {};
+      exifObj['GPS'] = {};
+      exifObj['1st'] = {};
+      exifObj['thumbnail'] = null;
+
+      exifObj["0th"][piexif.ImageIFD.Software] = "ExifLab";
+      
+      if (phoneModel && phoneModel !== 'none') {
+          exifObj["0th"][piexif.ImageIFD.Make] = phoneModel.split(' ')[0];
+          exifObj["0th"][piexif.ImageIFD.Model] = phoneModel;
+      }
+
+      if (date && time) {
+          const [hours, minutes] = time.split(":").map(Number);
+          const combinedDateTime = new Date(date);
+          combinedDateTime.setHours(hours, minutes, 0, 0);
+          const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
+          exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
+          exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
+      }
+      
+      if (latitude !== '' && longitude !== '') {
+          exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = Number(latitude) >= 0 ? "N" : "S";
+          exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(Number(latitude)));
+          exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = Number(longitude) >= 0 ? "E" : "W";
+          exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(Number(longitude)));
+      }
+
+      const exifStr = piexif.dump(exifObj);
+      
+      const cleanDataUrl = piexif.remove(imageDataUrl);
+      const newImageData = piexif.insert(exifStr, cleanDataUrl);
+      
+      if(modifiedImageSrc) URL.revokeObjectURL(modifiedImageSrc);
+      setModifiedImageSrc(newImageData);
+      
+      toast({
+          title: "Success!",
+          description: "Image metadata updated in preview.",
+      });
+    } catch (error) {
+      console.error("Error processing image:", error);
       toast({
         variant: "destructive",
-        title: "No Image",
-        description: "Please upload an image first.",
+        title: "Processing Error",
+        description: "Could not process the image.",
       });
-      return;
+    } finally {
+        setIsProcessing(false);
     }
-    
-    startTransition(async () => {
-      try {
-        let imageDataUrl: string;
-        if (imageFile.type === 'image/jpeg') {
-          imageDataUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = e => resolve(e.target?.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(imageFile);
-          });
-        } else {
-          imageDataUrl = await convertToJpegDataUrl(imageFile);
-        }
-            
-        const { phoneModel, date, time, latitude, longitude } = values;
-        
-        const exifObj = piexif.load(imageDataUrl) || {};
-        exifObj['0th'] = {};
-        exifObj['Exif'] = {};
-        exifObj['GPS'] = {};
-        exifObj['1st'] = {};
-        exifObj['thumbnail'] = null;
+  }, [imageFile, imageSrc, modifiedImageSrc, toast]);
 
-        exifObj["0th"][piexif.ImageIFD.Software] = "ExifLab";
-        
-        if (phoneModel && phoneModel !== 'none') {
-            exifObj["0th"][piexif.ImageIFD.Make] = phoneModel.split(' ')[0];
-            exifObj["0th"][piexif.ImageIFD.Model] = phoneModel;
-        }
+  // Debounce effect for auto-applying changes
+  React.useEffect(() => {
+    if (!isEditing || !imageFile) return;
 
-        if (date && time) {
-            const [hours, minutes] = time.split(":").map(Number);
-            const combinedDateTime = new Date(date);
-            combinedDateTime.setHours(hours, minutes, 0, 0);
-            const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
-            exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
-            exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
-        }
-        
-        if (latitude !== '' && longitude !== '') {
-            exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = latitude >= 0 ? "N" : "S";
-            exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDms(Math.abs(Number(latitude)));
-            exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = longitude >= 0 ? "E" : "W";
-            exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(Number(longitude)));
-        }
+    const handler = setTimeout(() => {
+        applyChanges(getValues());
+    }, 500);
 
-        const exifStr = piexif.dump(exifObj);
-        
-        const cleanDataUrl = piexif.remove(imageDataUrl);
-        const newImageData = piexif.insert(exifStr, cleanDataUrl);
-        
-        setModifiedImageSrc(newImageData);
-        
-        toast({
-            title: "Success!",
-            description: "Image metadata has been updated. You can now download the image.",
-        });
-      } catch (error) {
-        console.error("Error processing image:", error);
-        toast({
-          variant: "destructive",
-          title: "Processing Error",
-          description: "Could not process the image. It might be corrupted or in an unsupported format.",
-        });
-      }
-    });
-  };
+    return () => {
+        clearTimeout(handler);
+    };
+  }, [watchedValues, isEditing, imageFile, applyChanges, getValues]);
+
 
   const handleDownloadImage = () => {
     if (!modifiedImageSrc || !imageFile) return;
@@ -369,7 +388,6 @@ export function PhotoFakeApp() {
     link.href = modifiedImageSrc;
 
     const name = imageFile.name.substring(0, imageFile.name.lastIndexOf('.'));
-    // The downloaded file will be a jpeg
     link.download = `${name}_exiflab.jpeg`;
     
     document.body.appendChild(link);
@@ -431,256 +449,244 @@ export function PhotoFakeApp() {
     toast({ title: 'Original metadata reloaded into form' });
   };
 
-
   if (!imageSrc) {
     return (
-        <div
-        className={cn(
-            "flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors h-full",
-            isDragging && "bg-primary/10 border-primary"
-        )}
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className={cn(
+                "flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors h-full",
+                isDragging && "bg-primary/10 border-primary"
+            )}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
         >
-        <CloudUpload className={cn("h-12 w-12 text-muted-foreground/70 mb-4 transition-transform", isDragging && "scale-110")} />
-        <p className="font-semibold text-foreground">
-            Click to upload or drag & drop
-        </p>
-        <p className="text-sm text-muted-foreground">
-            JPG/JPEG, PNG, or AVIF files
-        </p>
-        <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            accept="image/jpeg,image/png,image/avif"
-        />
-        </div>
+            <CloudUpload className={cn("h-12 w-12 text-muted-foreground/70 mb-4 transition-transform", isDragging && "scale-110")} />
+            <p className="font-semibold text-foreground">
+                Click to upload or drag & drop
+            </p>
+            <p className="text-sm text-muted-foreground">
+                JPG/JPEG, PNG, or AVIF files
+            </p>
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="image/jpeg,image/png,image/avif"
+            />
+        </motion.div>
     );
   }
 
   return (
-    <Card className="w-full max-w-4xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20">
-      <CardContent className="p-6">
-        {modifiedImageSrc && (
-            <div className="space-y-6">
-                <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
-                    <Image
-                        src={modifiedImageSrc}
-                        alt="Modified preview"
-                        fill
-                        style={{objectFit:"contain"}}
-                    />
-                </div>
-                 <CardFooter className="flex justify-between p-0 pt-6">
-                    <Button variant="outline" onClick={handleBackToEdit}>
-                        <ChevronLeft className="mr-2 h-4 w-4" /> Back to Edit
-                    </Button>
-                    <Button onClick={handleDownloadImage} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                        <Download className="mr-2 h-4 w-4" /> Download Image
-                    </Button>
-                </CardFooter>
-            </div>
-        )}
-
-        {!modifiedImageSrc && (
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-                <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
-                <Image
-                    src={imageSrc}
-                    alt="Uploaded preview"
-                    fill
-                    style={{objectFit:"contain"}}
-                />
-                </div>
-                
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg">Metadata Diff</CardTitle>
+    <Card className="w-full max-w-4xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
+        <AnimatePresence mode="wait">
+            <motion.div
+                key={isEditing ? 'edit' : 'preview'}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+            >
+                <CardHeader className="flex-row items-start justify-between">
+                    <div>
+                        <CardTitle className="text-lg">
+                            {isEditing ? "Edit Metadata" : "Preview"}
+                        </CardTitle>
                         <CardDescription>
-                            {isEditing ? "Original vs. New EXIF data." : "Current EXIF data found in the image."}
+                            {isEditing ? "Modify the fields below. Changes are saved automatically." : "Review original vs. new metadata."}
                         </CardDescription>
-                    </CardHeader>
-                    <CardContent className="text-sm">
-                        {imageFile?.type !== 'image/jpeg' && !isEditing && (
-                            <p className="text-xs text-muted-foreground pb-2">Your file will be converted to JPEG to support EXIF data.</p>
-                        )}
-                        <DiffRow label="Make/Model" oldValue={`${existingExif?.Make || 'N/A'} ${existingExif?.Model || ''}`} newValue={watchedValues.phoneModel || 'N/A'}/>
-                        <DiffRow label="Date/Time" oldValue={existingExif?.DateTimeOriginal} newValue={getNewDateTime()}/>
-                        <DiffRow label="Latitude" oldValue={existingExif?.GPSLatitude} newValue={String(watchedValues.latitude) || 'N/A'}/>
-                        <DiffRow label="Longitude" oldValue={existingExif?.GPSLongitude} newValue={String(watchedValues.longitude) || 'N/A'}/>
-                    </CardContent>
-                </Card>
-                 
-                {!isEditing && (
-                    <Button onClick={() => setIsEditing(true)} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-                        <Pencil className="mr-2 h-4 w-4" /> Edit Myself
-                    </Button>
-                )}
-            </div>
-            {isEditing && (
-            <div className="space-y-6">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 flex flex-col h-full">
-                <div className="grid grid-cols-1 gap-6 flex-grow">
-                  <div className="space-y-2">
-                      <FormLabel>Quick Actions</FormLabel>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-4 w-4" /> Reload</Button>
-                          <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-4 w-4" /> Privacy</Button>
-                          <Button type="button" variant="outline" size="sm" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-4 w-4" /> AI</Button>
-                          <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-4 w-4" /> All</Button>
-                      </div>
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="phoneModel"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="flex items-center gap-2"><Smartphone />Phone Model</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                          disabled={isPending}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a device or leave empty" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {ANDROID_PHONE_MODELS.map((model) => (
-                              <SelectItem key={model} value={model}>
-                                {model}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+                    </div>
+                    {modifiedImageSrc && (
+                        <div className="flex items-center gap-2">
+                             <Button variant="ghost" size="sm" onClick={handleReset}>
+                                 <Trash2 className="mr-2 h-4 w-4" /> Start Over
+                            </Button>
+                            <Button onClick={handleDownloadImage} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                                <Download className="mr-2 h-4 w-4" /> Download
+                            </Button>
+                        </div>
                     )}
-                  />
-                  <div className="grid grid-cols-2 gap-4">
-                     <FormField
-                      control={form.control}
-                      name="date"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                           <FormLabel className="flex items-center gap-2"><CalendarIcon />Date</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant={"outline"}
-                                  className={cn(
-                                    "pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                  disabled={isPending}
-                                >
-                                  {field.value ? (
-                                    format(field.value, "PPP")
-                                  ) : (
-                                    <span>Pick a date or leave empty</span>
-                                  )}
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                disabled={(date) =>
-                                  date > new Date() || date < new Date("1900-01-01")
-                                }
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="time"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-2"><Clock />Time</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="HH:MM or empty" disabled={isPending}/>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="col-span-1">
-                     <div className="flex justify-between items-center mb-2">
-                        <FormLabel className="flex items-center gap-2"><MapPin />Location</FormLabel>
-                        <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isPending}>
-                            {isFetchingLocation ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LocateFixed className="mr-2 h-4 w-4" />}
-                            Use my location
-                        </Button>
-                     </div>
-                     <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                            control={form.control}
-                            name="latitude"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="text-xs text-muted-foreground">Latitude</FormLabel>
-                                <FormControl>
-                                <Input type="number" step="0.0001" {...field} placeholder="e.g. 40.7128" disabled={isPending}/>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
+                </CardHeader>
+                <CardContent className="p-6 pt-0 grid md:grid-cols-2 gap-8 items-start">
+                    <div className="space-y-4 flex flex-col">
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                            <AnimatePresence>
+                                {modifiedImageSrc && isEditing && (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="absolute inset-0 z-10"
+                                    >
+                                        <Image
+                                            src={modifiedImageSrc}
+                                            alt="Modified Preview"
+                                            fill
+                                            style={{ objectFit: "contain" }}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                            <Image
+                                src={imageSrc}
+                                alt="Uploaded preview"
+                                fill
+                                style={{ objectFit: "contain" }}
+                            />
+                             {isProcessing && (
+                                <div className="absolute inset-0 z-20 bg-background/80 flex items-center justify-center">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                </div>
                             )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="longitude"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel className="text-xs text-muted-foreground">Longitude</FormLabel>
+                        </div>
 
-                                <FormControl>
-                                <Input type="number" step="0.0001" {...field} placeholder="e.g. -74.006" disabled={isPending}/>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-                     </div>
-                     <FormDescription className="mt-2">
-                        e.g., New York: 40.7128, -74.0060
-                    </FormDescription>
-                  </div>
-                </div>
-                 <CardFooter className="flex justify-between p-0 pt-8 mt-auto">
-                    <Button type="button" variant="ghost" onClick={handleReset} disabled={isPending}>
-                    Reset
-                    </Button>
-                    <Button type="submit" disabled={isPending} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                    {isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
-                    Apply Changes
-                    </Button>
-                </CardFooter>
-              </form>
-            </Form>
-          </div>
-          )}
-          </div>
-        )}
-      </CardContent>
+                        {!isEditing && (
+                            <>
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg">Metadata Diff</CardTitle>
+                                        <CardDescription>
+                                            Current EXIF data found in the image.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="text-sm">
+                                        {imageFile?.type !== 'image/jpeg' && (
+                                            <p className="text-xs text-muted-foreground pb-2">Your file will be converted to JPEG to support EXIF data.</p>
+                                        )}
+                                        <DiffRow label="Make/Model" oldValue={`${existingExif?.Make || 'N/A'} ${existingExif?.Model || ''}`} newValue={watchedValues.phoneModel === 'none' ? 'Removed' : watchedValues.phoneModel || 'N/A'}/>
+                                        <DiffRow label="Date/Time" oldValue={existingExif?.DateTimeOriginal} newValue={getNewDateTime()}/>
+                                        <DiffRow label="Latitude" oldValue={existingExif?.GPSLatitude} newValue={String(watchedValues.latitude) || 'N/A'}/>
+                                        <DiffRow label="Longitude" oldValue={existingExif?.GPSLongitude} newValue={String(watchedValues.longitude) || 'N/A'}/>
+                                    </CardContent>
+                                </Card>
+                                <Button onClick={() => setIsEditing(true)} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+                                    <Pencil className="mr-2 h-4 w-4" /> Edit Myself
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                    
+                    {isEditing && (
+                        <div className="space-y-6">
+                            <Form {...form}>
+                                <form className="space-y-6 flex flex-col">
+                                    <div className="space-y-2">
+                                        <FormLabel>Quick Actions</FormLabel>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload</Button>
+                                            <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-3 w-3" /> Privacy</Button>
+                                            <Button type="button" variant="outline" size="sm" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-3 w-3" /> AI</Button>
+                                            <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> All</Button>
+                                        </div>
+                                    </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="phoneModel"
+                                        render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="flex items-center gap-2"><Smartphone className="h-4 w-4" />Phone Model</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                <SelectValue placeholder="Select a device or leave empty" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="none">None (Remove)</SelectItem>
+                                                {ANDROID_PHONE_MODELS.map((model) => (
+                                                <SelectItem key={model} value={model}>
+                                                    {model}
+                                                </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                        )}
+                                    />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormField
+                                        control={form.control}
+                                        name="date"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-col">
+                                            <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                <FormControl>
+                                                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
+                                                    {field.value ? (format(field.value, "PPP")) : (<span>Pick a date or leave empty</span>)}
+                                                    </Button>
+                                                </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus/>
+                                                </PopoverContent>
+                                            </Popover>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                        />
+                                        <FormField
+                                        control={form.control}
+                                        name="time"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" />Time</FormLabel>
+                                            <FormControl>
+                                                <Input {...field} placeholder="HH:MM or empty" disabled={isProcessing}/>
+                                            </FormControl>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                        />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4" />Location</FormLabel>
+                                            <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isProcessing}>
+                                                {isFetchingLocation ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LocateFixed className="mr-2 h-4 w-4" />}
+                                                Use my location
+                                            </Button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <FormField control={form.control} name="latitude" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs text-muted-foreground">Latitude</FormLabel>
+                                                    <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. 40.7128" disabled={isProcessing}/></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}/>
+                                            <FormField control={form.control} name="longitude" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs text-muted-foreground">Longitude</FormLabel>
+                                                    <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. -74.006" disabled={isProcessing}/></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}/>
+                                        </div>
+                                        <FormDescription className="mt-2">e.g., New York: 40.7128, -74.0060</FormDescription>
+                                    </div>
+                                </form>
+                            </Form>
+                             <CardFooter className="flex justify-end p-0 pt-4">
+                                <Button onClick={() => setIsEditing(false)} variant="outline">
+                                    <Wand className="mr-2 h-4 w-4" /> Go to Preview
+                                </Button>
+                            </CardFooter>
+                        </div>
+                    )}
+                </CardContent>
+            </motion.div>
+        </AnimatePresence>
     </Card>
   );
 }
+
+    
