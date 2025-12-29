@@ -294,7 +294,7 @@ export function PhotoFakeApp() {
     });
   };
 
-  const applyChanges = React.useCallback(async (values: z.infer<typeof formSchema>) => {
+  const applyChanges = async (values: z.infer<typeof formSchema>) => {
     if (!imageFile || !imageSrc) return;
     setIsProcessing(true);
 
@@ -353,8 +353,9 @@ export function PhotoFakeApp() {
       
       toast({
           title: "Success!",
-          description: "Image metadata updated in preview.",
+          description: "Image metadata updated. You can now download the image.",
       });
+      setIsEditing(false);
     } catch (error) {
       console.error("Error processing image:", error);
       toast({
@@ -365,21 +366,7 @@ export function PhotoFakeApp() {
     } finally {
         setIsProcessing(false);
     }
-  }, [imageFile, imageSrc, modifiedImageSrc, toast]);
-
-  // Debounce effect for auto-applying changes
-  React.useEffect(() => {
-    if (!isEditing || !imageFile) return;
-
-    const handler = setTimeout(() => {
-        applyChanges(getValues());
-    }, 500);
-
-    return () => {
-        clearTimeout(handler);
-    };
-  }, [watchedValues, isEditing, imageFile, applyChanges, getValues]);
-
+  };
 
   const handleDownloadImage = () => {
     if (!modifiedImageSrc || !imageFile) return;
@@ -428,11 +415,13 @@ export function PhotoFakeApp() {
     setValue('date', undefined);
     setValue('time', '');
     toast({ title: 'Privacy fields cleared' });
+    applyChanges(getValues());
   };
   
   const handleRemoveAi = () => {
     setValue('phoneModel', 'none');
     toast({ title: 'AI footprint fields cleared' });
+    applyChanges(getValues());
   };
   
   const handleRemoveAll = () => {
@@ -491,32 +480,27 @@ export function PhotoFakeApp() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
+                className="flex-grow flex flex-col"
             >
                 <CardHeader className="flex-row items-start justify-between">
                     <div>
-                        <CardTitle className="text-lg">
-                            {isEditing ? "Edit Metadata" : "Preview"}
-                        </CardTitle>
-                        <CardDescription>
-                            {isEditing ? "Modify the fields below. Changes are saved automatically." : "Review original vs. new metadata."}
-                        </CardDescription>
+                        {/* No title or description here */}
                     </div>
-                    {modifiedImageSrc && (
-                        <div className="flex items-center gap-2">
-                             <Button variant="ghost" size="sm" onClick={handleReset}>
-                                 <Trash2 className="mr-2 h-4 w-4" /> Start Over
-                            </Button>
-                            <Button onClick={handleDownloadImage} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                                <Download className="mr-2 h-4 w-4" /> Download
-                            </Button>
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                         <Button variant="ghost" size="sm" onClick={handleReset}>
+                             <Trash2 className="mr-2 h-4 w-4" /> Start Over
+                        </Button>
+                        <Button onClick={handleDownloadImage} disabled={!modifiedImageSrc || isProcessing} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                             Download
+                        </Button>
+                    </div>
                 </CardHeader>
-                <CardContent className="p-6 pt-0 grid md:grid-cols-2 gap-8 items-start">
+                <CardContent className="p-6 pt-0 grid md:grid-cols-2 gap-8 items-start flex-grow">
                     <div className="space-y-4 flex flex-col">
                         <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
                             <AnimatePresence>
-                                {modifiedImageSrc && isEditing && (
+                                {modifiedImageSrc && !isEditing && (
                                     <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
@@ -552,7 +536,7 @@ export function PhotoFakeApp() {
                                     <CardHeader>
                                         <CardTitle className="text-lg">Metadata Diff</CardTitle>
                                         <CardDescription>
-                                            Current EXIF data found in the image.
+                                            Review original vs. proposed metadata changes.
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="text-sm">
@@ -565,7 +549,14 @@ export function PhotoFakeApp() {
                                         <DiffRow label="Longitude" oldValue={existingExif?.GPSLongitude} newValue={String(watchedValues.longitude) || 'N/A'}/>
                                     </CardContent>
                                 </Card>
-                                <Button onClick={() => setIsEditing(true)} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+                                <div className="space-y-2">
+                                     <FormLabel>Quick Actions</FormLabel>
+                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                         <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-3 w-3" /> Remove Privacy</Button>
+                                         <Button type="button" variant="outline" size="sm" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-3 w-3" /> Remove AI Footprint</Button>
+                                     </div>
+                                </div>
+                                <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
                                     <Pencil className="mr-2 h-4 w-4" /> Edit Myself
                                 </Button>
                             </>
@@ -575,14 +566,12 @@ export function PhotoFakeApp() {
                     {isEditing && (
                         <div className="space-y-6">
                             <Form {...form}>
-                                <form className="space-y-6 flex flex-col">
+                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-6 flex flex-col">
                                     <div className="space-y-2">
                                         <FormLabel>Quick Actions</FormLabel>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload</Button>
-                                            <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-3 w-3" /> Privacy</Button>
-                                            <Button type="button" variant="outline" size="sm" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-3 w-3" /> AI</Button>
-                                            <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> All</Button>
+                                        <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original</Button>
+                                            <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
                                         </div>
                                     </div>
                                     <FormField
@@ -673,13 +662,16 @@ export function PhotoFakeApp() {
                                         </div>
                                         <FormDescription className="mt-2">e.g., New York: 40.7128, -74.0060</FormDescription>
                                     </div>
+                                    <CardFooter className="flex justify-end p-0 pt-4 gap-2">
+                                        <Button onClick={() => setIsEditing(false)} variant="ghost">
+                                            Cancel
+                                        </Button>
+                                        <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
+                                            <Wand className="mr-2 h-4 w-4" /> Apply Changes
+                                        </Button>
+                                    </CardFooter>
                                 </form>
                             </Form>
-                             <CardFooter className="flex justify-end p-0 pt-4">
-                                <Button onClick={() => setIsEditing(false)} variant="outline">
-                                    <Wand className="mr-2 h-4 w-4" /> Go to Preview
-                                </Button>
-                            </CardFooter>
                         </div>
                     )}
                 </CardContent>
