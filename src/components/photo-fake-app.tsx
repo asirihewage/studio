@@ -293,7 +293,7 @@ export function PhotoFakeApp() {
 
         exifObj["0th"][piexif.ImageIFD.Software] = "ExifLab";
         
-        if (phoneModel) {
+        if (phoneModel && phoneModel !== 'none') {
             exifObj["0th"][piexif.ImageIFD.Make] = phoneModel.split(' ')[0];
             exifObj["0th"][piexif.ImageIFD.Model] = phoneModel;
         }
@@ -525,7 +525,7 @@ export function PhotoFakeApp() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="none">None</SelectItem>
                             {ANDROID_PHONE_MODELS.map((model) => (
                               <SelectItem key={model} value={model}>
                                 {model}
