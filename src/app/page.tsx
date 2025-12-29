@@ -20,6 +20,9 @@ export default function Home() {
       <div className="mt-8 w-full max-w-4xl flex-grow flex flex-col">
          <PhotoFakeApp />
       </div>
+      <footer className="mt-8 text-center text-sm text-muted-foreground">
+        <p>&copy; {new Date().getFullYear()} ExifLab. Created by Asiri Hewage.</p>
+      </footer>
     </main>
   );
 }
