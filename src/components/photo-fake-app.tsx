@@ -287,13 +287,7 @@ export function PhotoFakeApp() {
 
         const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
 
-        let exifObj;
-        try {
-          // piexifjs can only load from JPEG
-          exifObj = piexif.load(imageDataUrl);
-        } catch (err) {
-          exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null };
-        }
+        const exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null };
 
         exifObj["0th"][piexif.Tag.Image.Make] = phoneModel.split(' ')[0];
         exifObj["0th"][piexif.Tag.Image.Model] = phoneModel;
@@ -308,7 +302,9 @@ export function PhotoFakeApp() {
         exifObj["GPS"][piexif.Tag.GPS.GPSLongitude] = piexif.GPSHelper.degToDms(Math.abs(longitude));
 
         const exifStr = piexif.dump(exifObj);
-        const newImageData = piexif.insert(exifStr, imageDataUrl);
+        
+        const cleanDataUrl = piexif.remove(imageDataUrl);
+        const newImageData = piexif.insert(exifStr, cleanDataUrl);
         
         setModifiedImageSrc(newImageData);
         
