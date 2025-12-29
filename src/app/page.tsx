@@ -17,7 +17,7 @@ export default function Home() {
           Easily edit, remove, and create realistic EXIF data for your images. Perfect for photographers, privacy advocates, and social media enthusiasts who want full control over their digital footprint.
         </p>
       </div>
-      <div className="mt-8 w-full">
+      <div className="mt-8 w-full max-w-4xl flex-grow flex flex-col">
          <PhotoFakeApp />
       </div>
     </main>
