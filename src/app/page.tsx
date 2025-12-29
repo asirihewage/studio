@@ -11,10 +11,10 @@ export default function Home() {
             V1.0 Now Live
         </Badge>
         <h1 className="text-4xl md:text-6xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
-          Take Control of Your Photo&apos;s Story
+          Take Control of Your Photo&apos;s Meta Data
         </h1>
         <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
-          Easily edit, remove, and create realistic EXIF data for your images. Perfect for photographers, privacy advocates, and social media enthusiasts who want full control over their digital footprint.
+          Modify your photo&apos;s meta data and control the digital footprint of it as you wish.
         </p>
       </div>
       <div className="mt-8 w-full max-w-4xl flex-grow flex flex-col">
