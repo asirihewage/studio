@@ -766,237 +766,220 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     </div>
                 </CardHeader>
                 <CardContent className="p-6 pt-0 grid md:grid-cols-2 gap-8 items-start flex-grow min-h-0">
-                    {!isEditing && (
-                        <>
-                             <div className="space-y-4 flex flex-col h-full">
-                                <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
-                                    <Image
-                                        src={imageSrc}
-                                        alt="Uploaded preview"
-                                        fill
-                                        style={{ objectFit: "contain" }}
-                                    />
-                                    {isProcessing && (
-                                        <div className="absolute inset-0 z-20 bg-background/80 flex items-center justify-center">
-                                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                        </div>
-                                    )}
+                    <div className="space-y-4 flex flex-col h-full">
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                            <AnimatePresence>
+                                {modifiedImageSrc && isEditing && (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="absolute inset-0 z-10"
+                                    >
+                                        <Image
+                                            src={modifiedImageSrc}
+                                            alt="Modified Preview"
+                                            fill
+                                            style={{ objectFit: "contain" }}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                            <Image
+                                src={imageSrc}
+                                alt="Uploaded preview"
+                                fill
+                                style={{ objectFit: "contain" }}
+                            />
+                            {isProcessing && (
+                                <div className="absolute inset-0 z-20 bg-background/80 flex items-center justify-center">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                 </div>
-                                <Card className="flex-grow flex flex-col min-h-0">
-                                    <CardHeader>
-                                        <CardTitle className="text-lg">Original Metadata</CardTitle>
-                                        <CardDescription>
-                                            EXIF data found in the original image.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="flex-grow min-h-0">
-                                        {renderExifData()}
-                                    </CardContent>
-                                </Card>
+                            )}
+                        </div>
+                        {isEditing ? (
+                            <div className="flex-grow flex flex-col min-h-0">
+                                <ChangesSummary />
                             </div>
-                            <div className="space-y-6">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Ready to Edit?</CardTitle>
-                                        <CardDescription>
-                                            You can modify the metadata yourself or use one of our quick actions to get started.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                         <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
-                                            <Pencil className="mr-2 h-4 w-4" /> Edit Myself
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader>
-                                         <CardTitle>Quick Actions</CardTitle>
-                                        <CardDescription>
-                                            Apply common metadata changes with one click.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-2">
-                                         <Button type="button" variant="outline" className="w-full justify-start" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy Data</Button>
-                                         <p className="text-xs text-muted-foreground px-2">Clears location, date, and time fields.</p>
-                                         <Separator className="my-2"/>
-                                         <Button type="button" variant="outline" className="w-full justify-start" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-4 w-4" /> Remove Device Footprint</Button>
-                                         <p className="text-xs text-muted-foreground px-2">Clears device make and model fields.</p>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </>
-                    )}
+                        ) : (
+                            <Card className="flex-grow flex flex-col min-h-0">
+                                <CardHeader>
+                                    <CardTitle className="text-lg">Original Metadata</CardTitle>
+                                    <CardDescription>
+                                        EXIF data found in the original image.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="flex-grow min-h-0">
+                                    {renderExifData()}
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
                     
-                    {isEditing && (
-                        <>
-                            <div className="space-y-4 flex flex-col h-full">
-                                <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
-                                    <AnimatePresence>
-                                        {modifiedImageSrc && (
-                                            <motion.div
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                transition={{ duration: 0.5 }}
-                                                className="absolute inset-0 z-10"
-                                            >
-                                                <Image
-                                                    src={modifiedImageSrc}
-                                                    alt="Modified Preview"
-                                                    fill
-                                                    style={{ objectFit: "contain" }}
-                                                />
-                                            </motion.div>
+                    {!isEditing ? (
+                         <div className="space-y-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Ready to Edit?</CardTitle>
+                                    <CardDescription>
+                                        You can modify the metadata yourself or use one of our quick actions to get started.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                        <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
+                                        <Pencil className="mr-2 h-4 w-4" /> Edit Myself
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader>
+                                        <CardTitle>Quick Actions</CardTitle>
+                                    <CardDescription>
+                                        Apply common metadata changes with one click.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-2">
+                                        <Button type="button" variant="outline" className="w-full justify-start" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy Data</Button>
+                                        <p className="text-xs text-muted-foreground px-2">Clears location, date, and time fields.</p>
+                                        <Separator className="my-2"/>
+                                        <Button type="button" variant="outline" className="w-full justify-start" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-4 w-4" /> Remove Device Footprint</Button>
+                                        <p className="text-xs text-muted-foreground px-2">Clears device make and model fields.</p>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <Form {...form}>
+                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-3 flex flex-col">
+                                    <div className="space-y-2">
+                                        <FormLabel>Quick Actions</FormLabel>
+                                        <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original</Button>
+                                            <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
+                                        </div>
+                                    </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="deviceModel"
+                                        render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="flex items-center gap-2"><Camera className="h-4 w-4" />Device Model</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                <SelectValue placeholder="Select a device or leave empty" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="none">None (Remove)</SelectItem>
+                                                {Object.keys(DEVICE_PROFILES).map((model) => (
+                                                <SelectItem key={model} value={model}>
+                                                    {model}
+                                                </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
                                         )}
-                                    </AnimatePresence>
-                                    <Image
-                                        src={imageSrc}
-                                        alt="Uploaded preview"
-                                        fill
-                                        style={{ objectFit: "contain" }}
                                     />
-                                    {isProcessing && (
-                                        <div className="absolute inset-0 z-20 bg-background/80 flex items-center justify-center">
-                                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-grow flex flex-col min-h-0">
-                                  <ChangesSummary />
-                                </div>
-                            </div>
-                            <div className="space-y-3">
-                                <Form {...form}>
-                                    <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-3 flex flex-col">
-                                        <div className="space-y-2">
-                                            <FormLabel>Quick Actions</FormLabel>
-                                            <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                                                <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original</Button>
-                                                <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
-                                            </div>
-                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
                                         <FormField
                                             control={form.control}
-                                            name="deviceModel"
+                                            name="date"
                                             render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="flex items-center gap-2"><Camera className="h-4 w-4" />Device Model</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                    <SelectValue placeholder="Select a device or leave empty" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="none">None (Remove)</SelectItem>
-                                                    {Object.keys(DEVICE_PROFILES).map((model) => (
-                                                    <SelectItem key={model} value={model}>
-                                                        {model}
-                                                    </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                                </Select>
-                                                <FormMessage />
-                                            </FormItem>
+                                                <FormItem className="flex flex-col">
+                                                    <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <FormControl>
+                                                                <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
+                                                                    {field.value ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}
+                                                                </Button>
+                                                            </FormControl>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0" align="start">
+                                                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                    <FormDescription>Or leave empty</FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
                                             )}
                                         />
-                                         <div className="grid grid-cols-2 gap-4">
-                                            <FormField
-                                                control={form.control}
-                                                name="date"
-                                                render={({ field }) => (
-                                                    <FormItem className="flex flex-col">
-                                                        <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <FormControl>
-                                                                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
-                                                                        {field.value ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}
-                                                                    </Button>
-                                                                </FormControl>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-auto p-0" align="start">
-                                                                <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                        <FormDescription>Or leave empty</FormDescription>
-                                                        <FormMessage />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                             <div>
-                                                <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" />Time</FormLabel>
-                                                <div className="grid grid-cols-3 gap-2 mt-2">
-                                                    <FormField control={form.control} name="hour" render={({ field }) => (
-                                                        <FormItem>
-                                                            <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                                                                <FormControl><SelectTrigger><SelectValue placeholder="Hr" /></SelectTrigger></FormControl>
-                                                                <SelectContent>{Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )} />
-                                                    <FormField control={form.control} name="minute" render={({ field }) => (
-                                                        <FormItem>
-                                                            <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                                                                <FormControl><SelectTrigger><SelectValue placeholder="Min" /></SelectTrigger></FormControl>
-                                                                <SelectContent>{Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )} />
-                                                    <FormField control={form.control} name="period" render={({ field }) => (
-                                                        <FormItem>
-                                                            <Select onValueChange={field.onChange} value={field.value as 'AM' | 'PM'} disabled={isProcessing}>
-                                                                <FormControl><SelectTrigger><SelectValue placeholder="AM/PM" /></SelectTrigger></FormControl>
-                                                                <SelectContent>
-                                                                    <SelectItem value="AM">AM</SelectItem>
-                                                                    <SelectItem value="PM">PM</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )} />
-                                                </div>
-                                                 <FormDescription className="mt-2">Or leave empty</FormDescription>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4" />Location</FormLabel>
-                                                <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isProcessing}>
-                                                    {isFetchingLocation ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LocateFixed className="mr-2 h-4 w-4" />}
-                                                    Use my location
-                                                </Button>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <FormField control={form.control} name="latitude" render={({ field }) => (
+                                            <div>
+                                            <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" />Time</FormLabel>
+                                            <div className="grid grid-cols-3 gap-2 mt-2">
+                                                <FormField control={form.control} name="hour" render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel className="text-xs text-muted-foreground">Latitude</FormLabel>
-                                                        <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. 40.7128" disabled={isProcessing}/></FormControl>
-                                                        <FormMessage />
+                                                        <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                                            <FormControl><SelectTrigger><SelectValue placeholder="Hr" /></SelectTrigger></FormControl>
+                                                            <SelectContent>{Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                                                        </Select>
                                                     </FormItem>
-                                                )}/>
-                                                <FormField control={form.control} name="longitude" render={({ field }) => (
+                                                )} />
+                                                <FormField control={form.control} name="minute" render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel className="text-xs text-muted-foreground">Longitude</FormLabel>
-                                                        <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. -74.006" disabled={isProcessing}/></FormControl>
-                                                        <FormMessage />
+                                                        <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                                            <FormControl><SelectTrigger><SelectValue placeholder="Min" /></SelectTrigger></FormControl>
+                                                            <SelectContent>{Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                                                        </Select>
                                                     </FormItem>
-                                                )}/>
+                                                )} />
+                                                <FormField control={form.control} name="period" render={({ field }) => (
+                                                    <FormItem>
+                                                        <Select onValueChange={field.onChange} value={field.value as 'AM' | 'PM'} disabled={isProcessing}>
+                                                            <FormControl><SelectTrigger><SelectValue placeholder="AM/PM" /></SelectTrigger></FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="AM">AM</SelectItem>
+                                                                <SelectItem value="PM">PM</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormItem>
+                                                )} />
                                             </div>
-                                            <FormDescription className="mt-2">{locationMessage}</FormDescription>
+                                                <FormDescription className="mt-2">Or leave empty</FormDescription>
                                         </div>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4" />Location</FormLabel>
+                                            <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isProcessing}>
+                                                {isFetchingLocation ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LocateFixed className="mr-2 h-4 w-4" />}
+                                                Use my location
+                                            </Button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <FormField control={form.control} name="latitude" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs text-muted-foreground">Latitude</FormLabel>
+                                                    <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. 40.7128" disabled={isProcessing}/></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}/>
+                                            <FormField control={form.control} name="longitude" render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs text-muted-foreground">Longitude</FormLabel>
+                                                    <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. -74.006" disabled={isProcessing}/></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}/>
+                                        </div>
+                                        <FormDescription className="mt-2">{locationMessage}</FormDescription>
+                                    </div>
 
-                                        <CardFooter className="flex justify-end p-0 pt-4 gap-2">
-                                            <Button onClick={() => setIsEditing(false)} variant="ghost">
-                                                Cancel
-                                            </Button>
-                                            <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
-                                                <Wand className="mr-2 h-4 w-4" /> Apply Changes
-                                            </Button>
-                                        </CardFooter>
-                                    </form>
-                                </Form>
-                            </div>
-                        </>
+                                    <CardFooter className="flex justify-end p-0 pt-4 gap-2">
+                                        <Button onClick={() => setIsEditing(false)} variant="ghost">
+                                            Cancel
+                                        </Button>
+                                        <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
+                                            <Wand className="mr-2 h-4 w-4" /> Apply Changes
+                                        </Button>
+                                    </CardFooter>
+                                </form>
+                            </Form>
+                        </div>
                     )}
                 </CardContent>
             </motion.div>
