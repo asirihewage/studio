@@ -562,7 +562,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   
   const handleRemoveAi = () => {
     setValue('deviceModel', 'none');
-    toast({ title: 'AI footprint fields cleared' });
+    toast({ title: 'Device footprint fields cleared' });
   };
   
   const handleRemoveAll = () => {
