@@ -1,5 +1,6 @@
 
 'use client';
+import { InteractiveBackground } from '@/components/interactive-background';
 import { PhotoFakeApp } from '@/components/photo-fake-app';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -12,15 +13,13 @@ export default function Home() {
   return (
     <main 
       className={cn(
-        "flex min-h-screen w-full flex-col items-center justify-center p-4 sm:p-8 transition-colors duration-1000",
+        "flex min-h-screen w-full flex-col items-center justify-center p-4 sm:p-8 transition-colors duration-1000 relative isolate overflow-hidden",
         hasImage 
           ? "bg-gradient-to-br from-background to-muted/40"
-          : "bg-gradient-to-br from-blue-950 via-slate-900 to-zinc-900 animate-gradient-xy"
+          : "bg-slate-900"
       )}
-      style={{
-        '--gradient-xy-animation-duration': '10s',
-      } as React.CSSProperties}
     >
+      <InteractiveBackground active={!hasImage} />
       <div className="z-10 w-full max-w-5xl text-center flex flex-col items-center">
         <Badge variant="outline" className="mb-4 bg-card/50 backdrop-blur-sm text-white border-white/20">
             <Camera className="mr-2 h-3 w-3" />
@@ -39,14 +38,12 @@ export default function Home() {
           Modify your photo&apos;s meta data and control the digital footprint of it as you wish.
         </p>
       </div>
-      <div className="mt-8 w-full max-w-4xl flex-grow flex flex-col">
+      <div className="mt-8 w-full max-w-4xl flex-grow flex flex-col z-10">
          <PhotoFakeApp onFileSelect={(file) => setHasImage(!!file)} />
       </div>
-      <footer className={cn("mt-8 text-center text-sm", hasImage ? "text-muted-foreground" : "text-slate-400")}>
+      <footer className={cn("mt-8 text-center text-sm z-10", hasImage ? "text-muted-foreground" : "text-slate-400")}>
         <p>&copy; {new Date().getFullYear()} ExifLab. Created by Asiri Hewage.</p>
       </footer>
     </main>
   );
 }
-
-    
