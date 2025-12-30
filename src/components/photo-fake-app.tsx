@@ -895,6 +895,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                 {renderExifData()}
                             </CardContent>
                         </Card>
+                        <ChangesSummary />
                     </div>
                     
                     <div className="space-y-4">
@@ -909,7 +910,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                     </div>
                                 </div>
                                 <Separator />
-                                <ChangesSummary />
+
                                 <FormField
                                     control={form.control}
                                     name="deviceModel"
@@ -1084,5 +1085,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
+
 
     
