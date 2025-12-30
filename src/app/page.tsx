@@ -2,13 +2,15 @@
 'use client';
 import { InteractiveBackground } from '@/components/interactive-background';
 import { PhotoFakeApp } from '@/components/photo-fake-app';
+import { Turnstile } from '@/components/turnstile';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Camera } from 'lucide-react';
+import { Camera, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Home() {
   const [hasImage, setHasImage] = useState(false);
+  const [turnstileOk, setTurnstileOk] = useState(false);
 
   return (
     <main 
@@ -39,7 +41,13 @@ export default function Home() {
         </p>
       </div>
       <div className="mt-8 w-full max-w-4xl flex-grow flex flex-col z-10">
-         <PhotoFakeApp onFileSelect={(file) => setHasImage(!!file)} />
+        {turnstileOk ? (
+          <PhotoFakeApp onFileSelect={(file) => setHasImage(!!file)} />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <Turnstile onVerify={() => setTurnstileOk(true)} />
+          </div>
+        )}
       </div>
       <footer className={cn("mt-8 text-center text-sm z-10", hasImage ? "text-muted-foreground" : "text-slate-400")}>
         <p>&copy; {new Date().getFullYear()} ExifLab. Created by Asiri Hewage.</p>
