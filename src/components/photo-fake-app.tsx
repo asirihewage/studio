@@ -56,7 +56,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { DEVICE_PROFILES } from "@/lib/constants";
+import { DEVICE_PROFILES, DeviceProfile } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
@@ -72,6 +72,11 @@ const formSchema = z.object({
   period: z.enum(['AM', 'PM']).optional(),
   latitude: z.union([z.coerce.number().min(-90).max(90), z.literal('')]),
   longitude: z.union([z.coerce.number().min(-180).max(180), z.literal('')]),
+  fNumber: z.union([z.coerce.number().positive(), z.literal('')]),
+  exposureTime: z.string().optional(),
+  iso: z.union([z.coerce.number().int().positive(), z.literal('')]),
+  focalLength: z.union([z.coerce.number().int().positive(), z.literal('')]),
+  lensModel: z.string().optional(),
 }).refine(data => (data.hour && data.minute && data.period) || (!data.hour && !data.minute && !data.period), {
     message: "Please select hour, minute, and period, or leave all time fields empty.",
     path: ["hour"],
@@ -143,11 +148,42 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       period: undefined,
       latitude: '',
       longitude: '',
+      fNumber: '',
+      exposureTime: '',
+      iso: '',
+      focalLength: '',
+      lensModel: '',
     },
   });
 
   const { watch, setValue, reset, getValues } = form;
   const watchedValues = watch();
+
+  const populateFormWithProfile = (profile: DeviceProfile | null) => {
+    if (profile) {
+      setValue('fNumber', profile.exif.FNumber ? parseFloat((profile.exif.FNumber[0] / profile.exif.FNumber[1]).toFixed(1)) : '');
+      setValue('exposureTime', profile.exif.ExposureTime ? `1/${profile.exif.ExposureTime[1]}` : '');
+      setValue('iso', profile.exif.ISOSpeedRatings || '');
+      setValue('focalLength', profile.exif.FocalLength ? profile.exif.FocalLength[0] / profile.exif.FocalLength[1] : '');
+      setValue('lensModel', profile.exif.LensModel || '');
+    } else {
+       setValue('fNumber', '');
+       setValue('exposureTime', '');
+       setValue('iso', '');
+       setValue('focalLength', '');
+       setValue('lensModel', '');
+    }
+  }
+
+  React.useEffect(() => {
+    const subscription = watch((value, { name, type }) => {
+      if (name === 'deviceModel' && type === 'change') {
+        const newProfile = value.deviceModel && value.deviceModel !== 'none' ? DEVICE_PROFILES[value.deviceModel] : null;
+        populateFormWithProfile(newProfile);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, setValue]);
 
   const populateFormFromExif = (exif: ExifData | null) => {
     if (!exif) {
@@ -159,6 +195,11 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         period: undefined,
         latitude: '',
         longitude: '',
+        fNumber: '',
+        exposureTime: '',
+        iso: '',
+        focalLength: '',
+        lensModel: '',
       });
       return;
     };
@@ -216,6 +257,15 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         }
     }
     
+    const fNumberRaw = exifIfd[piexif.ExifIFD.FNumber];
+    const fNumberVal = fNumberRaw ? parseFloat((fNumberRaw[0] / fNumberRaw[1]).toFixed(1)) : '';
+    
+    const exposureTimeRaw = exifIfd[piexif.ExifIFD.ExposureTime];
+    const exposureTimeVal = exposureTimeRaw ? (exposureTimeRaw[0] === 1 ? `1/${exposureTimeRaw[1]}` : (exposureTimeRaw[0]/exposureTimeRaw[1]).toString()) : '';
+
+    const focalLengthRaw = exifIfd[piexif.ExifIFD.FocalLength];
+    const focalLengthVal = focalLengthRaw ? focalLengthRaw[0] / focalLengthRaw[1] : '';
+
     reset({
       deviceModel: model || "none",
       date: dateVal,
@@ -224,6 +274,11 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       period: periodVal,
       latitude: latVal,
       longitude: lonVal,
+      fNumber: fNumberVal,
+      exposureTime: exposureTimeVal,
+      iso: exifIfd[piexif.ExifIFD.ISOSpeedRatings] || '',
+      focalLength: focalLengthVal,
+      lensModel: exifIfd[piexif.ExifIFD.LensModel] || '',
     });
   };
 
@@ -245,7 +300,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       const newImageSrc = URL.createObjectURL(file);
       setImageSrc(newImageSrc);
       setModifiedImageSrc(null);
-      setIsEditing(false); // Reset to preview mode on new file
+      setIsEditing(false);
       setIsNonJpeg(file.type !== 'image/jpeg');
 
       const reader = new FileReader();
@@ -312,6 +367,11 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       period: undefined,
       latitude: '',
       longitude: '',
+      fNumber: '',
+      exposureTime: '',
+      iso: '',
+      focalLength: '',
+      lensModel: '',
     });
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -404,31 +464,22 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         imageDataUrl = await convertToJpegDataUrl(imageFile);
       }
           
-      const { deviceModel, date, hour, minute, period, latitude, longitude } = values;
+      const { deviceModel, date, hour, minute, period, latitude, longitude, fNumber, exposureTime, iso, focalLength, lensModel } = values;
       
       const exifObj = piexif.load(imageDataUrl) || {};
       exifObj['0th'] = exifObj['0th'] || {};
       exifObj['Exif'] = exifObj['Exif'] || {};
       exifObj['GPS'] = {}; // Always clear GPS to start fresh
-      exifObj['1st'] = exifObj['1st'] || {};
-      exifObj['thumbnail'] = exifObj['thumbnail'] || undefined;
-
+      
       // Always set software to ExifLab unless a device profile with software is chosen
       exifObj["0th"][piexif.ImageIFD.Software] = "ExifLab";
       
       if (deviceModel && deviceModel !== 'none') {
         const profile = DEVICE_PROFILES[deviceModel];
-        if (profile) {
-            exifObj["0th"][piexif.ImageIFD.Make] = profile.make;
-            exifObj["0th"][piexif.ImageIFD.Model] = profile.model;
-            if (profile.software) {
-                exifObj["0th"][piexif.ImageIFD.Software] = profile.software;
-            }
-            if (profile.exif.FNumber) exifObj["Exif"][piexif.ExifIFD.FNumber] = profile.exif.FNumber;
-            if (profile.exif.ExposureTime) exifObj["Exif"][piexif.ExifIFD.ExposureTime] = profile.exif.ExposureTime;
-            if (profile.exif.ISOSpeedRatings) exifObj["Exif"][piexif.ExifIFD.ISOSpeedRatings] = profile.exif.ISOSpeedRatings;
-            if (profile.exif.FocalLength) exifObj["Exif"][piexif.ExifIFD.FocalLength] = profile.exif.FocalLength;
-            if (profile.exif.LensModel) exifObj["Exif"][piexif.ExifIFD.LensModel] = profile.exif.LensModel;
+        exifObj["0th"][piexif.ImageIFD.Make] = profile.make;
+        exifObj["0th"][piexif.ImageIFD.Model] = profile.model;
+        if (profile.software) {
+            exifObj["0th"][piexif.ImageIFD.Software] = profile.software;
         }
       } else {
         delete exifObj["0th"][piexif.ImageIFD.Make];
@@ -472,13 +523,29 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
              });
           }
       }
+
+      // Handle new EXIF fields
+      if (fNumber) exifObj["Exif"][piexif.ExifIFD.FNumber] = [Math.round(fNumber * 10), 10]; else delete exifObj["Exif"][piexif.ExifIFD.FNumber];
+      if (exposureTime) {
+        if(exposureTime.startsWith('1/')) {
+          exifObj["Exif"][piexif.ExifIFD.ExposureTime] = [1, parseInt(exposureTime.substring(2))];
+        } else {
+          // Handle non-fractional exposure times if needed
+        }
+      } else delete exifObj["Exif"][piexif.ExifIFD.ExposureTime];
+      if (iso) exifObj["Exif"][piexif.ExifIFD.ISOSpeedRatings] = iso; else delete exifObj["Exif"][piexif.ExifIFD.ISOSpeedRatings];
+      if (focalLength) exifObj["Exif"][piexif.ExifIFD.FocalLength] = [focalLength, 1]; else delete exifObj["Exif"][piexif.ExifIFD.FocalLength];
+      if (lensModel) exifObj["Exif"][piexif.ExifIFD.LensModel] = lensModel; else delete exifObj["Exif"][piexif.ExifIFD.LensModel];
       
       // Clean up empty IFD blocks to prevent piexifjs errors
-      if (Object.keys(exifObj['1st'] || {}).length === 0) {
+      if (exifObj['1st'] && Object.keys(exifObj['1st']).length === 0) {
         delete exifObj['1st'];
       }
-      if (!exifObj.thumbnail) {
+      if (exifObj.thumbnail && (exifObj.thumbnail === null || exifObj.thumbnail === undefined)) {
         delete exifObj.thumbnail;
+      }
+       if (Object.keys(exifObj['GPS'] || {}).length === 0) {
+        delete exifObj['GPS'];
       }
 
       const exifStr = piexif.dump(exifObj);
@@ -499,7 +566,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       toast({
         variant: "destructive",
         title: "Processing Error",
-        description: "Could not process the image.",
+        description: `Could not process the image. ${error instanceof Error ? error.message : ''}`,
       });
     } finally {
         setIsProcessing(false);
@@ -536,7 +603,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   }
 
   const ChangesSummary = () => {
-    const { deviceModel, date, hour, minute, period, latitude, longitude } = watchedValues;
+    const { deviceModel, date, hour, minute, period, latitude, longitude, fNumber, exposureTime, iso, focalLength, lensModel } = watchedValues;
     const oldExif = existingExif || { '0th': {}, Exif: {}, GPS: {} };
     
     const getOldExifValue = (ifd: '0th' | 'Exif' | 'GPS', tagId: number): any => oldExif[ifd]?.[tagId];
@@ -597,15 +664,12 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         { label: "Device Model", oldValue: oldModel, newValue: newModel },
         { label: "Date/Time", oldValue: formatOldValue('Exif', 'DateTimeOriginal', piexif.ExifIFD.DateTimeOriginal), newValue: newDateTime },
         { label: "Location", oldValue: oldLocation, newValue: newLocation },
+        { label: "Aperture", oldValue: formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber), newValue: fNumber ? `f/${fNumber}` : 'REMOVED' },
+        { label: "Exposure Time", oldValue: formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime), newValue: exposureTime || 'REMOVED' },
+        { label: "ISO", oldValue: formatOldValue('Exif', 'ISOSpeedRatings', piexif.ExifIFD.ISOSpeedRatings), newValue: iso ? iso.toString() : 'REMOVED' },
+        { label: "Focal Length", oldValue: formatOldValue('Exif', 'FocalLength', piexif.ExifIFD.FocalLength), newValue: focalLength ? `${focalLength}mm` : 'REMOVED' },
+        { label: "Lens Model", oldValue: formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel), newValue: lensModel || 'REMOVED' },
     ];
-    
-    if (newProfile) {
-        if(newProfile.exif.FNumber) changes.push({ label: "Aperture", oldValue: formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber), newValue: formatExifValue('Exif', 'FNumber', newProfile.exif.FNumber) });
-        if(newProfile.exif.ExposureTime) changes.push({ label: "Exposure Time", oldValue: formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime), newValue: formatExifValue('Exif', 'ExposureTime', newProfile.exif.ExposureTime) });
-        if(newProfile.exif.ISOSpeedRatings) changes.push({ label: "ISO", oldValue: formatOldValue('Exif', 'ISOSpeedRatings', piexif.ExifIFD.ISOSpeedRatings), newValue: newProfile.exif.ISOSpeedRatings.toString() });
-        if(newProfile.exif.FocalLength) changes.push({ label: "Focal Length", oldValue: formatOldValue('Exif', 'FocalLength', piexif.ExifIFD.FocalLength), newValue: formatExifValue('Exif', 'FocalLength', newProfile.exif.FocalLength) });
-        if(newProfile.exif.LensModel) changes.push({ label: "Lens Model", oldValue: formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel), newValue: newProfile.exif.LensModel });
-    }
 
     const hasChanges = changes.some(c => c.oldValue !== c.newValue);
 
@@ -836,7 +900,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                             </div>
                         ) : (
                             <Form {...form}>
-                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-3 flex flex-col">
+                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-4 flex flex-col">
                                     <FormField
                                         control={form.control}
                                         name="deviceModel"
@@ -862,63 +926,113 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                         </FormItem>
                                         )}
                                     />
-                                        <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <FormField
                                             control={form.control}
-                                            name="date"
+                                            name="fNumber"
                                             render={({ field }) => (
-                                                <FormItem className="flex flex-col">
-                                                    <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
-                                                    <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <FormControl>
-                                                                <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
-                                                                    {field.value ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}
-                                                                </Button>
-                                                            </FormControl>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-auto p-0" align="start">
-                                                            <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                    <FormDescription>Or leave empty</FormDescription>
-                                                    <FormMessage />
+                                                <FormItem>
+                                                    <FormLabel>Aperture (f-stop)</FormLabel>
+                                                    <FormControl><Input type="number" step="0.1" {...field} placeholder="e.g. 2.8" disabled={isProcessing}/></FormControl>
                                                 </FormItem>
-                                            )}
-                                        />
-                                            <div>
-                                            <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" />Time</FormLabel>
-                                            <div className="grid grid-cols-3 gap-2 mt-2">
-                                                <FormField control={form.control} name="hour" render={({ field }) => (
-                                                    <FormItem>
-                                                        <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                                                            <FormControl><SelectTrigger><SelectValue placeholder="Hr" /></SelectTrigger></FormControl>
-                                                            <SelectContent>{Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )} />
-                                                <FormField control={form.control} name="minute" render={({ field }) => (
-                                                    <FormItem>
-                                                        <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                                                            <FormControl><SelectTrigger><SelectValue placeholder="Min" /></SelectTrigger></FormControl>
-                                                            <SelectContent>{Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )} />
-                                                <FormField control={form.control} name="period" render={({ field }) => (
-                                                    <FormItem>
-                                                        <Select onValueChange={field.onChange} value={field.value as 'AM' | 'PM'} disabled={isProcessing}>
-                                                            <FormControl><SelectTrigger><SelectValue placeholder="AM/PM" /></SelectTrigger></FormControl>
-                                                            <SelectContent>
-                                                                <SelectItem value="AM">AM</SelectItem>
-                                                                <SelectItem value="PM">PM</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )} />
-                                            </div>
-                                                <FormDescription className="mt-2">Or leave empty</FormDescription>
+                                            )}/>
+                                        <FormField
+                                            control={form.control}
+                                            name="exposureTime"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Exposure Time</FormLabel>
+                                                    <FormControl><Input {...field} placeholder="e.g. 1/125" disabled={isProcessing}/></FormControl>
+                                                </FormItem>
+                                            )}/>
+                                    </div>
+                                     <div className="grid grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="iso"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>ISO</FormLabel>
+                                                    <FormControl><Input type="number" {...field} placeholder="e.g. 100" disabled={isProcessing}/></FormControl>
+                                                </FormItem>
+                                            )}/>
+                                        <FormField
+                                            control={form.control}
+                                            name="focalLength"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Focal Length (mm)</FormLabel>
+                                                    <FormControl><Input type="number" {...field} placeholder="e.g. 50" disabled={isProcessing}/></FormControl>
+                                                </FormItem>
+                                            )}/>
+                                    </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="lensModel"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Lens Model</FormLabel>
+                                                <FormControl><Input {...field} placeholder="e.g. EF50mm f/1.8 STM" disabled={isProcessing}/></FormControl>
+                                            </FormItem>
+                                        )}/>
+                                    <Separator />
+                                    <div className="grid grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="date"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-col">
+                                                <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <FormControl>
+                                                            <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
+                                                                {field.value ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}
+                                                            </Button>
+                                                        </FormControl>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0" align="start">
+                                                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <FormDescription>Or leave empty</FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                        <div>
+                                        <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" />Time</FormLabel>
+                                        <div className="grid grid-cols-3 gap-2 mt-2">
+                                            <FormField control={form.control} name="hour" render={({ field }) => (
+                                                <FormItem>
+                                                    <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                                        <FormControl><SelectTrigger><SelectValue placeholder="Hr" /></SelectTrigger></FormControl>
+                                                        <SelectContent>{Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={form.control} name="minute" render={({ field }) => (
+                                                <FormItem>
+                                                    <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                                        <FormControl><SelectTrigger><SelectValue placeholder="Min" /></SelectTrigger></FormControl>
+                                                        <SelectContent>{Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={form.control} name="period" render={({ field }) => (
+                                                <FormItem>
+                                                    <Select onValueChange={field.onChange} value={field.value as 'AM' | 'PM'} disabled={isProcessing}>
+                                                        <FormControl><SelectTrigger><SelectValue placeholder="AM/PM" /></SelectTrigger></FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="AM">AM</SelectItem>
+                                                            <SelectItem value="PM">PM</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )} />
                                         </div>
+                                            <FormDescription className="mt-2">Or leave empty</FormDescription>
+                                    </div>
                                     </div>
                                     <div>
                                         <div className="flex justify-between items-center mb-2">
@@ -966,3 +1080,4 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   );
 }
 
+    
