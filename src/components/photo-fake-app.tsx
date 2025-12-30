@@ -790,53 +790,49 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                             )}
                         </div>
                         
-                        {isEditing ? (
-                            <div className="flex-grow flex flex-col min-h-0">
-                                <ChangesSummary />
-                            </div>
-                        ) : (
-                             <Card className="flex-grow flex flex-col min-h-0">
-                                <CardHeader>
-                                    <CardTitle className="text-lg">Original Metadata</CardTitle>
-                                    <CardDescription>
-                                        EXIF data found in the original image.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="flex-grow min-h-0">
-                                    {renderExifData()}
-                                </CardContent>
-                            </Card>
-                        )}
+                        <Card className="flex-grow flex flex-col min-h-0">
+                            <CardHeader>
+                                <CardTitle className="text-lg">Original Metadata</CardTitle>
+                                <CardDescription>
+                                    EXIF data found in the original image.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex-grow min-h-0">
+                                {renderExifData()}
+                            </CardContent>
+                        </Card>
                     </div>
                     
                     {!isEditing ? (
                          <div className="space-y-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Ready to Edit?</CardTitle>
-                                    <CardDescription>
-                                        Click the button below to start modifying your image's metadata.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                        <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
-                                        <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
-                                    </Button>
-                                </CardContent>
-                            </Card>
+                            <div>
+                                <Form {...form}>
+                                    <form onSubmit={form.handleSubmit(applyChanges)}>
+                                        <div className="space-y-2">
+                                            <Label>Quick Actions</Label>
+                                            <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                                                <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original</Button>
+                                                <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
+                                            </div>
+                                        </div>
+                                        <Separator className="my-4" />
+                                        <ChangesSummary />
+                                         <div className="mt-4">
+                                            <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
+                                                <Pencil className="mr-2 h-4 w-4" /> Edit Manually
+                                            </Button>
+                                        </div>
+                                         <Button type="submit" className="w-full mt-2 bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
+                                            <Wand className="mr-2 h-4 w-4" /> Apply Changes & Preview
+                                        </Button>
+                                    </form>
+                                </Form>
+                            </div>
                         </div>
                     ) : (
                         <div className="space-y-3">
                             <Form {...form}>
                                 <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-3 flex flex-col">
-                                    <div className="space-y-2">
-                                        <FormLabel>Quick Actions</FormLabel>
-                                        <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original</Button>
-                                            <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
-                                        </div>
-                                    </div>
-                                    <Separator/>
                                     <FormField
                                         control={form.control}
                                         name="deviceModel"
@@ -965,5 +961,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
+
 
     
