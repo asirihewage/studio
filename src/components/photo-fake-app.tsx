@@ -157,6 +157,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     const model = zeroth[piexif.ImageIFD.Model] as string | undefined;
     const dateTime = exifIfd[piexif.ExifIFD.DateTimeOriginal] as string | undefined;
     
+    const GPSHelper = (piexif as any).GPSHelper;
     const latRef = gps[piexif.GPSIFD.GPSLatitudeRef];
     const lat = gps[piexif.GPSIFD.GPSLatitude];
     const lonRef = gps[piexif.GPSIFD.GPSLongitudeRef];
@@ -165,7 +166,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     let latVal: number | '' = '';
     let lonVal: number | '' = '';
     
-    const GPSHelper = (piexif as any).GPSHelper;
     try {
         if (GPSHelper && lat && latRef) {
             latVal = parseFloat(GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
@@ -405,7 +405,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
           const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
           exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
           exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
-      } else {
+      } else if (!date && !time) {
         delete exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal];
         delete exifObj["Exif"][piexif.ExifIFD.CreateDate];
       }
@@ -494,8 +494,16 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
         const lonRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitudeRef];
         const lon = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitude];
-        if (lat && latRef) oldLat = GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
-        if (lon && lonRef) oldLon = GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
+        if (lat && latRef) {
+          try {
+            oldLat = GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
+          } catch {}
+        }
+        if (lon && lonRef) {
+          try {
+            oldLon = GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
+          } catch {}
+        }
     }
     const oldLocation = (oldLat !== 'N/A' && oldLon !== 'N/A') ? `${oldLat}, ${oldLon}` : 'N/A';
 
@@ -622,8 +630,8 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         >
             <div
                 className={cn(
-                    "flex flex-col items-center justify-center border-2 border-dashed border-white/20 rounded-lg p-12 text-center cursor-pointer hover:bg-white/10 transition-colors w-full max-w-lg",
-                    isDragging && "bg-white/20 border-white"
+                    "flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors w-full max-w-lg",
+                    isDragging ? "bg-white/20 border-white" : "border-white/20 hover:bg-white/10"
                 )}
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={handleDragOver}
@@ -650,7 +658,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   }
 
   return (
-    <Card className="w-full max-w-4xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden h-[calc(100vh-10rem)]">
+    <Card className="w-full max-w-4xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
             <motion.div
                 key={isEditing ? 'edit' : 'preview'}
@@ -691,14 +699,14 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                         </div>
                                     )}
                                 </div>
-                                <Card className="flex-grow flex flex-col">
+                                <Card className="flex-grow flex flex-col min-h-0">
                                     <CardHeader>
                                         <CardTitle className="text-lg">Original Metadata</CardTitle>
                                         <CardDescription>
                                             EXIF data found in the original image.
                                         </CardDescription>
                                     </CardHeader>
-                                    <CardContent className="flex-grow">
+                                    <CardContent className="flex-grow min-h-0">
                                         {renderExifData()}
                                     </CardContent>
                                 </Card>
@@ -890,6 +898,5 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
-
 
     
