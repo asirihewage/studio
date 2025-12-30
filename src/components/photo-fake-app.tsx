@@ -352,6 +352,8 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   const applyChanges = async (values: z.infer<typeof formSchema>) => {
     if (!imageFile || !imageSrc) return;
     setIsProcessing(true);
+    
+    const GPSHelper = (piexif as any).GPSHelper;
 
     try {
       let imageDataUrl: string;
@@ -408,7 +410,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         delete exifObj["Exif"][piexif.ExifIFD.CreateDate];
       }
       
-      const GPSHelper = (piexif as any).GPSHelper;
       if (latitude !== '' && longitude !== '' && GPSHelper) {
           try {
             exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = Number(latitude) >= 0 ? "N" : "S";
@@ -623,19 +624,19 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         >
             <div
                 className={cn(
-                    "flex flex-col items-center justify-center border-2 border-dashed border-muted-foreground/30 rounded-lg p-12 text-center cursor-pointer hover:bg-muted/50 transition-colors w-full max-w-lg",
-                    isDragging && "bg-primary/10 border-primary"
+                    "flex flex-col items-center justify-center border-2 border-dashed border-white/20 rounded-lg p-12 text-center cursor-pointer hover:bg-white/10 transition-colors w-full max-w-lg",
+                    isDragging && "bg-white/20 border-white"
                 )}
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
             >
-                <CloudUpload className={cn("h-12 w-12 text-muted-foreground/70 mb-4 transition-transform", isDragging && "scale-110")} />
-                <p className="font-semibold text-foreground">
+                <CloudUpload className={cn("h-12 w-12 text-slate-400 mb-4 transition-transform", isDragging && "scale-110")} />
+                <p className="font-semibold text-white">
                     Click to upload or drag & drop
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-slate-400">
                     JPG/JPEG, PNG, or AVIF files
                 </p>
                 <input
@@ -859,4 +860,3 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   );
 }
 
-    
