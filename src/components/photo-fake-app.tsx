@@ -628,21 +628,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     };
   }, [imageSrc, modifiedImageSrc]);
   
-  const handleRemovePrivacy = () => {
-    setValue('latitude', '');
-    setValue('longitude', '');
-    setValue('date', undefined);
-    setValue('hour', undefined);
-    setValue('minute', undefined);
-    setValue('period', undefined);
-    toast({ title: 'Privacy fields cleared' });
-  };
-  
-  const handleRemoveAi = () => {
-    setValue('deviceModel', 'none');
-    toast({ title: 'Device footprint fields cleared' });
-  };
-  
   const handleRemoveAll = () => {
     setValue('deviceModel', 'none');
     setValue('latitude', '');
@@ -981,3 +966,4 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   );
 }
 
+    
