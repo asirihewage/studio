@@ -62,6 +62,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
 import { ScrollArea } from "./ui/scroll-area";
 import { Separator } from "./ui/separator";
+import { Label } from "./ui/label";
 
 const formSchema = z.object({
   deviceModel: z.string(),
@@ -532,7 +533,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     const getOldExifValue = (ifd: '0th' | 'Exif' | 'GPS', tagId: number): any => oldExif[ifd]?.[tagId];
 
     let GPSHelper: any = (piexif as any).GPSHelper;
-    if (!(GPSHelper && 'dmsToDeg' in GPSHelper)) {
+    if (!(GPSHelper && 'degToDms' in GPSHelper)) {
         GPSHelper = (piexif as any).default?.GPSHelper;
     }
     
@@ -804,30 +805,26 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     </div>
                     
                     {!isEditing ? (
-                         <div className="space-y-6">
-                            <div>
-                                <Form {...form}>
-                                    <form onSubmit={form.handleSubmit(applyChanges)}>
-                                        <div className="space-y-2">
-                                            <Label>Quick Actions</Label>
-                                            <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                                                <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original</Button>
-                                                <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
-                                            </div>
+                        <div className="space-y-6">
+                            <Form {...form}>
+                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-4">
+                                    <div>
+                                        <Label className="text-sm font-medium">Quick Actions</Label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 mt-2">
+                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original</Button>
+                                            <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
                                         </div>
-                                        <Separator className="my-4" />
-                                        <ChangesSummary />
-                                         <div className="mt-4">
-                                            <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
-                                                <Pencil className="mr-2 h-4 w-4" /> Edit Manually
-                                            </Button>
-                                        </div>
-                                         <Button type="submit" className="w-full mt-2 bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
-                                            <Wand className="mr-2 h-4 w-4" /> Apply Changes & Preview
-                                        </Button>
-                                    </form>
-                                </Form>
-                            </div>
+                                    </div>
+                                    <Separator />
+                                    <ChangesSummary />
+                                    <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
+                                        <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
+                                    </Button>
+                                    <Button type="submit" className="w-full mt-2 bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
+                                        <Wand className="mr-2 h-4 w-4" /> Apply Changes & Preview
+                                    </Button>
+                                </form>
+                            </Form>
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -961,6 +958,5 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
-
 
     
