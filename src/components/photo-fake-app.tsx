@@ -24,6 +24,7 @@ import {
   Pencil,
   Wand,
   Camera,
+  ShieldCheck,
 } from "lucide-react";
 import Image from "next/image";
 import { format } from "date-fns";
@@ -34,9 +35,9 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -839,7 +840,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3 }}
-            className="flex h-full items-center justify-center"
+            className="flex h-full flex-col items-center justify-center gap-4"
         >
             <div
                 className={cn(
@@ -866,12 +867,16 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     accept="image/jpeg,image/png,image/avif"
                 />
             </div>
+             <div className="flex items-center gap-2 text-sm text-slate-400 max-w-lg text-center">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                <span>All processing happens in your browser. Your photos are never uploaded to a server and are discarded when you leave the site.</span>
+            </div>
         </motion.div>
     );
   }
 
   return (
-    <Card className="w-full max-w-screen-2xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
+    <Card className="w-full shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
             <motion.div
                 key={'preview'}
