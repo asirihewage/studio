@@ -809,31 +809,24 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                         </Card>
                     </div>
                     
-                    {!isEditing ? (
-                         <div className="space-y-4">
-                             <Form {...form}>
-                                 <form onSubmit={form.handleSubmit(applyChanges)}>
-                                     <div>
-                                         <Label className="text-sm font-medium">Quick Actions</Label>
-                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
-                                             <Button type="button" variant="outline" size="sm" onClick={handleRemoveAiFootprint}><BrainCircuit className="mr-2 h-4 w-4" /> Remove AI Footprint</Button>
-                                             <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacyFootprint}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy</Button>
-                                             <Button type="button" variant="outline" size="sm" onClick={handleRemoveDeviceFootprint}><Smartphone className="mr-2 h-4 w-4" /> Remove Device</Button>
-                                         </div>
-                                          <div className="mt-2">
-                                             <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata} className="w-full"><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original Metadata</Button>
-                                         </div>
-                                     </div>
-                                     <Separator />
-                                     <ChangesSummary />
-                                     <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
-                                         <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
-                                     </Button>
-                                 </form>
-                             </Form>
-                         </div>
-                    ) : (
-                        <div className="space-y-3">
+                    <div className="space-y-4">
+                        {!isEditing ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <Label className="text-sm font-medium">Quick Actions</Label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                                        <Button type="button" variant="outline" size="sm" onClick={handleRemoveAiFootprint}><BrainCircuit className="mr-2 h-4 w-4" /> Remove AI</Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacyFootprint}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy</Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={handleRemoveDeviceFootprint}><Smartphone className="mr-2 h-4 w-4" /> Remove Device</Button>
+                                    </div>
+                                </div>
+                                <Separator />
+                                <ChangesSummary />
+                                <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
+                                    <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
+                                </Button>
+                            </div>
+                        ) : (
                             <Form {...form}>
                                 <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-3 flex flex-col">
                                     <FormField
@@ -956,14 +949,13 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                     </CardFooter>
                                 </form>
                             </Form>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </CardContent>
             </motion.div>
         </AnimatePresence>
     </Card>
   );
 }
-
 
     
