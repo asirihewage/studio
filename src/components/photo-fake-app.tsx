@@ -34,7 +34,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -222,7 +221,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         latitude: '' as const,
         longitude: '' as const,
         fNumber: '' as const,
-        exposureTime: '',
+        exposureTime: '' as const,
         iso: '' as const,
         focalLength: '' as const,
         lensModel: '',
@@ -871,7 +870,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   }
 
   return (
-    <Card className="w-full max-w-7xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
+    <Card className="w-full max-w-screen-2xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
             <motion.div
                 key={'preview'}
@@ -953,8 +952,8 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                     <Label className="text-sm font-medium">Quick Actions</Label>
                                     <div className="flex flex-wrap gap-2 mt-2">
                                         <Button type="button" variant="outline" size="sm" onClick={handleRemoveAiFootprint}><BrainCircuit className="mr-2 h-4 w-4" /> Remove AI Footprint</Button>
-                                        <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacyFootprint}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy</Button>
-                                        <Button type="button" variant="outline" size="sm" onClick={handleRemoveDeviceFootprint}><Smartphone className="mr-2 h-4 w-4" /> Remove Device</Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacyFootprint}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy Data</Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={handleRemoveDeviceFootprint}><Smartphone className="mr-2 h-4 w-4" /> Remove Device Data</Button>
                                     </div>
                                 </div>
                                 <Separator />
