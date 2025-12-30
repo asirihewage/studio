@@ -122,6 +122,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
+  const [isNonJpeg, setIsNonJpeg] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -158,23 +159,25 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     const dateTime = exifIfd[piexif.ExifIFD.DateTimeOriginal] as string | undefined;
     
     const GPSHelper = (piexif as any).GPSHelper;
-    const latRef = gps[piexif.GPSIFD.GPSLatitudeRef];
-    const lat = gps[piexif.GPSIFD.GPSLatitude];
-    const lonRef = gps[piexif.GPSIFD.GPSLongitudeRef];
-    const lon = gps[piexif.GPSIFD.GPSLongitude];
-
     let latVal: number | '' = '';
     let lonVal: number | '' = '';
-    
-    try {
-        if (GPSHelper && lat && latRef) {
-            latVal = parseFloat(GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
+
+    if (GPSHelper) {
+        try {
+            const latRef = gps[piexif.GPSIFD.GPSLatitudeRef];
+            const lat = gps[piexif.GPSIFD.GPSLatitude];
+            const lonRef = gps[piexif.GPSIFD.GPSLongitudeRef];
+            const lon = gps[piexif.GPSIFD.GPSLongitude];
+
+            if (lat && latRef) {
+                latVal = parseFloat(GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
+            }
+            if (lon && lonRef) {
+                lonVal = parseFloat(GPSHelper.dmsToDeg(lon, lonRef).toFixed(4));
+            }
+        } catch(e) {
+            console.error("Could not parse GPS coordinates from EXIF", e)
         }
-        if (GPSHelper && lon && lonRef) {
-            lonVal = parseFloat(GPSHelper.dmsToDeg(lon, lonRef).toFixed(4));
-        }
-    } catch(e) {
-        console.error("Could not parse GPS coordinates from EXIF", e)
     }
 
     let dateVal: Date | undefined = undefined;
@@ -219,6 +222,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       setImageSrc(newImageSrc);
       setModifiedImageSrc(null);
       setIsEditing(false); // Reset to preview mode on new file
+      setIsNonJpeg(file.type !== 'image/jpeg');
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -228,12 +232,11 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
             if (file.type !== 'image/jpeg') {
                 setExistingExif(null);
                 populateFormFromExif(null);
-                return;
+            } else {
+                const exifData = piexif.load(dataUrl);
+                setExistingExif(exifData);
+                populateFormFromExif(exifData);
             }
-            
-            const exifData = piexif.load(dataUrl);
-            setExistingExif(exifData);
-            populateFormFromExif(exifData);
           } catch (error) {
               setExistingExif(null);
               populateFormFromExif(null);
@@ -276,6 +279,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     setModifiedImageSrc(null);
     setExistingExif(null);
     setIsEditing(false);
+    setIsNonJpeg(false);
     reset({
       deviceModel: "none",
       date: new Date(),
@@ -405,7 +409,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
           const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
           exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
           exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
-      } else if (!date && !time) {
+      } else {
         delete exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal];
         delete exifObj["Exif"][piexif.ExifIFD.CreateDate];
       }
@@ -490,20 +494,18 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     let oldLat = 'N/A';
     let oldLon = 'N/A';
     if (GPSHelper && oldExif.GPS) {
-        const latRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitudeRef];
-        const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
-        const lonRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitudeRef];
-        const lon = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitude];
-        if (lat && latRef) {
-          try {
-            oldLat = GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
-          } catch {}
-        }
-        if (lon && lonRef) {
-          try {
-            oldLon = GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
-          } catch {}
-        }
+        try {
+            const latRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitudeRef];
+            const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
+            const lonRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitudeRef];
+            const lon = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitude];
+            if (lat && latRef) {
+                oldLat = GPSHelper.dmsToDeg(lat, latRef).toFixed(4);
+            }
+            if (lon && lonRef) {
+                oldLon = GPSHelper.dmsToDeg(lon, lonRef).toFixed(4);
+            }
+        } catch {}
     }
     const oldLocation = (oldLat !== 'N/A' && oldLon !== 'N/A') ? `${oldLat}, ${oldLon}` : 'N/A';
 
@@ -581,7 +583,10 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   
   const renderExifData = () => {
     if (!existingExif) {
-      return <p className="text-sm text-muted-foreground p-4">No EXIF data found in this image.</p>;
+        if (isNonJpeg) {
+            return <p className="text-sm text-muted-foreground p-4">No EXIF data found. New data will be added on a JPEG version of the image.</p>;
+        }
+        return <p className="text-sm text-muted-foreground p-4">No EXIF data found in this image.</p>;
     }
     const ifdOrder = ['0th', 'Exif', 'GPS', '1st'];
     
@@ -898,5 +903,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
+
 
     
