@@ -411,7 +411,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       exifObj['Exif'] = exifObj['Exif'] || {};
       exifObj['GPS'] = {}; // Always clear GPS to start fresh
       exifObj['1st'] = exifObj['1st'] || {};
-      exifObj['thumbnail'] = exifObj['thumbnail'] || null;
+      exifObj['thumbnail'] = exifObj['thumbnail'] || undefined;
 
       // Always set software to ExifLab unless a device profile with software is chosen
       exifObj["0th"][piexif.ImageIFD.Software] = "ExifLab";
@@ -957,5 +957,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
+
 
     
