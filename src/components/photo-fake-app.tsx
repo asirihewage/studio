@@ -413,6 +413,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       exifObj['1st'] = exifObj['1st'] || {};
       exifObj['thumbnail'] = exifObj['thumbnail'] || null;
 
+      // Always set software to ExifLab unless a device profile with software is chosen
       exifObj["0th"][piexif.ImageIFD.Software] = "ExifLab";
       
       if (deviceModel && deviceModel !== 'none') {
@@ -629,15 +630,23 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     };
   }, [imageSrc, modifiedImageSrc]);
   
-  const handleRemoveAll = () => {
-    setValue('deviceModel', 'none');
+  const handleRemoveAiFootprint = () => {
+    toast({ title: 'AI footprint fields cleared' });
+  };
+  
+  const handleRemovePrivacyFootprint = () => {
     setValue('latitude', '');
     setValue('longitude', '');
     setValue('date', undefined);
     setValue('hour', undefined);
     setValue('minute', undefined);
     setValue('period', undefined);
-    toast({ title: 'All metadata fields cleared' });
+    toast({ title: 'Privacy footprint fields cleared' });
+  };
+
+  const handleRemoveDeviceFootprint = () => {
+    setValue('deviceModel', 'none');
+    toast({ title: 'Device footprint fields cleared' });
   };
 
   const handleReloadMetadata = () => {
@@ -810,9 +819,13 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                 <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-4">
                                     <div>
                                         <Label className="text-sm font-medium">Quick Actions</Label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 mt-2">
-                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata}><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original</Button>
-                                            <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                                            <Button type="button" variant="outline" size="sm" onClick={handleRemoveAiFootprint}><BrainCircuit className="mr-2 h-4 w-4" /> Remove AI Footprint</Button>
+                                            <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacyFootprint}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy Footprint</Button>
+                                            <Button type="button" variant="outline" size="sm" onClick={handleRemoveDeviceFootprint}><Smartphone className="mr-2 h-4 w-4" /> Remove Device Footprint</Button>
+                                        </div>
+                                         <div className="mt-2">
+                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata} className="w-full"><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original Metadata</Button>
                                         </div>
                                     </div>
                                     <Separator />
