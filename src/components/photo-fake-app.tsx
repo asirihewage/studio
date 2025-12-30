@@ -113,7 +113,7 @@ const formatExifValue = (ifd: string, tag: string, value: any): string => {
 };
 
 
-export function PhotoFakeApp() {
+export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | null) => void }) {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imageSrc, setImageSrc] = React.useState<string | null>(null);
   const [modifiedImageSrc, setModifiedImageSrc] = React.useState<string | null>(null);
@@ -200,7 +200,7 @@ export function PhotoFakeApp() {
     });
   };
 
-  const handleFileSelect = (file: File | null | undefined) => {
+  const handleFileSelectInternal = (file: File | null | undefined) => {
     if (file) {
       if (!['image/jpeg', 'image/png', 'image/avif'].includes(file.type)) {
         toast({
@@ -214,6 +214,7 @@ export function PhotoFakeApp() {
         URL.revokeObjectURL(imageSrc);
       }
       setImageFile(file);
+      onFileSelect(file);
       const newImageSrc = URL.createObjectURL(file);
       setImageSrc(newImageSrc);
       setModifiedImageSrc(null);
@@ -243,7 +244,7 @@ export function PhotoFakeApp() {
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    handleFileSelect(event.target.files?.[0]);
+    handleFileSelectInternal(event.target.files?.[0]);
   };
   
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
@@ -259,7 +260,7 @@ export function PhotoFakeApp() {
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
-    handleFileSelect(event.dataTransfer.files?.[0]);
+    handleFileSelectInternal(event.dataTransfer.files?.[0]);
   };
 
   const handleReset = () => {
@@ -271,6 +272,7 @@ export function PhotoFakeApp() {
     }
     setImageFile(null);
     setImageSrc(null);
+    onFileSelect(null);
     setModifiedImageSrc(null);
     setExistingExif(null);
     setIsEditing(false);
@@ -486,7 +488,7 @@ export function PhotoFakeApp() {
     const GPSHelper = (piexif as any).GPSHelper;
     let oldLat = 'N/A';
     let oldLon = 'N/A';
-    if (GPSHelper) {
+    if (GPSHelper && oldExif.GPS) {
         const latRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitudeRef];
         const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
         const lonRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLongitudeRef];
