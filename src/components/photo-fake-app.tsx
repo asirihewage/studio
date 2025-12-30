@@ -66,11 +66,14 @@ import { Separator } from "./ui/separator";
 const formSchema = z.object({
   deviceModel: z.string(),
   date: z.date().optional(),
-  time: z.string().refine(val => val === '' || /^([01]\d|2[0-3]):([0-5]\d)$/.test(val), {
-    message: "Please use HH:MM format or leave empty."
-  }),
+  hour: z.string().optional(),
+  minute: z.string().optional(),
+  period: z.enum(['AM', 'PM']).optional(),
   latitude: z.union([z.coerce.number().min(-90).max(90), z.literal('')]),
   longitude: z.union([z.coerce.number().min(-180).max(180), z.literal('')]),
+}).refine(data => (data.hour && data.minute && data.period) || (!data.hour && !data.minute && !data.period), {
+    message: "Please select hour, minute, and period, or leave all time fields empty.",
+    path: ["hour"],
 });
 
 type ExifData = { [key: string]: { [key: number]: any } };
@@ -134,7 +137,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     defaultValues: {
       deviceModel: "none",
       date: undefined,
-      time: "",
+      hour: undefined,
+      minute: undefined,
+      period: undefined,
       latitude: '',
       longitude: '',
     },
@@ -148,7 +153,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       reset({
         deviceModel: "none",
         date: undefined,
-        time: '',
+        hour: undefined,
+        minute: undefined,
+        period: undefined,
         latitude: '',
         longitude: '',
       });
@@ -188,13 +195,20 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     }
 
     let dateVal: Date | undefined = undefined;
-    let timeVal: string = '';
+    let hourVal: string | undefined = undefined;
+    let minuteVal: string | undefined = undefined;
+    let periodVal: 'AM' | 'PM' | undefined = undefined;
+
     if (dateTime) {
         try {
             const parsedDate = new Date(dateTime.replace(/:/, '-').replace(/:/, '-'));
             if (!isNaN(parsedDate.getTime())) {
                 dateVal = parsedDate;
-                timeVal = format(parsedDate, "HH:mm");
+                const hours24 = parsedDate.getHours();
+                periodVal = hours24 >= 12 ? 'PM' : 'AM';
+                const hours12 = hours24 % 12 || 12;
+                hourVal = String(hours12).padStart(2, '0');
+                minuteVal = String(parsedDate.getMinutes()).padStart(2, '0');
             }
         } catch (e) {
             console.error("Could not parse date from EXIF", e);
@@ -204,7 +218,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     reset({
       deviceModel: model || "none",
       date: dateVal,
-      time: timeVal,
+      hour: hourVal,
+      minute: minuteVal,
+      period: periodVal,
       latitude: latVal,
       longitude: lonVal,
     });
@@ -290,7 +306,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     reset({
       deviceModel: "none",
       date: undefined,
-      time: "",
+      hour: undefined,
+      minute: undefined,
+      period: undefined,
       latitude: '',
       longitude: '',
     });
@@ -383,7 +401,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         imageDataUrl = await convertToJpegDataUrl(imageFile);
       }
           
-      const { deviceModel, date, time, latitude, longitude } = values;
+      const { deviceModel, date, hour, minute, period, latitude, longitude } = values;
       
       const exifObj = piexif.load(imageDataUrl) || {};
       exifObj['0th'] = exifObj['0th'] || {};
@@ -413,10 +431,15 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         delete exifObj["0th"][piexif.ImageIFD.Model];
       }
 
-      if (date && time) {
-          const [hours, minutes] = time.split(":").map(Number);
+      if (date && hour && minute && period) {
+          let hours24 = parseInt(hour, 10);
+          if (period === 'PM' && hours24 !== 12) {
+              hours24 += 12;
+          } else if (period === 'AM' && hours24 === 12) {
+              hours24 = 0;
+          }
           const combinedDateTime = new Date(date);
-          combinedDateTime.setHours(hours, minutes, 0, 0);
+          combinedDateTime.setHours(hours24, parseInt(minute, 10), 0, 0);
           const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
           exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
           exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
@@ -501,7 +524,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   }
 
   const ChangesSummary = () => {
-    const { deviceModel, date, time, latitude, longitude } = watchedValues;
+    const { deviceModel, date, hour, minute, period, latitude, longitude } = watchedValues;
     const oldExif = existingExif || { '0th': {}, Exif: {}, GPS: {} };
     
     const getOldExifValue = (ifd: '0th' | 'Exif' | 'GPS', tagId: number): any => oldExif[ifd]?.[tagId];
@@ -537,14 +560,19 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     const newProfile = deviceModel !== 'none' ? DEVICE_PROFILES[deviceModel] : null;
 
     let newDateTime = "N/A";
-    if (date && time) {
-        const [hours, minutes] = time.split(":").map(Number);
+    if (date && hour && minute && period) {
+        let hours24 = parseInt(hour, 10);
+        if (period === 'PM' && hours24 !== 12) {
+            hours24 += 12;
+        } else if (period === 'AM' && hours24 === 12) {
+            hours24 = 0;
+        }
         const combinedDateTime = new Date(date);
-        combinedDateTime.setHours(hours, minutes, 0, 0);
+        combinedDateTime.setHours(hours24, parseInt(minute, 10), 0, 0);
         newDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
     } else if (date) {
         newDateTime = format(date, "yyyy:MM:dd HH:mm:ss");
-    } else if (!date && !time) {
+    } else if (!date && !hour) {
         newDateTime = "REMOVED";
     }
 
@@ -602,7 +630,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     setValue('latitude', '');
     setValue('longitude', '');
     setValue('date', undefined);
-    setValue('time', '');
+    setValue('hour', undefined);
+    setValue('minute', undefined);
+    setValue('period', undefined);
     toast({ title: 'Privacy fields cleared' });
   };
   
@@ -616,7 +646,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     setValue('latitude', '');
     setValue('longitude', '');
     setValue('date', undefined);
-    setValue('time', '');
+    setValue('hour', undefined);
+    setValue('minute', undefined);
+    setValue('period', undefined);
     toast({ title: 'All metadata fields cleared' });
   };
 
@@ -866,42 +898,63 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                             </FormItem>
                                             )}
                                         />
-                                        <div className="grid grid-cols-2 gap-4">
+                                         <div className="grid grid-cols-2 gap-4">
                                             <FormField
-                                            control={form.control}
-                                            name="date"
-                                            render={({ field }) => (
-                                                <FormItem className="flex flex-col">
-                                                <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
-                                                <Popover>
-                                                    <PopoverTrigger asChild>
-                                                    <FormControl>
-                                                        <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
-                                                        {field.value ? (format(field.value, "PPP")) : (<span>Pick a date or leave empty</span>)}
-                                                        </Button>
-                                                    </FormControl>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-auto p-0" align="start">
-                                                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus/>
-                                                    </PopoverContent>
-                                                </Popover>
-                                                <FormMessage />
-                                                </FormItem>
-                                            )}
+                                                control={form.control}
+                                                name="date"
+                                                render={({ field }) => (
+                                                    <FormItem className="flex flex-col">
+                                                        <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <FormControl>
+                                                                    <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
+                                                                        {field.value ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}
+                                                                    </Button>
+                                                                </FormControl>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0" align="start">
+                                                                <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                        <FormDescription>Or leave empty</FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
                                             />
-                                            <FormField
-                                            control={form.control}
-                                            name="time"
-                                            render={({ field }) => (
-                                                <FormItem>
+                                             <div>
                                                 <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" />Time</FormLabel>
-                                                <FormControl>
-                                                    <Input {...field} placeholder="HH:MM or empty" disabled={isProcessing}/>
-                                                </FormControl>
-                                                <FormMessage />
-                                                </FormItem>
-                                            )}
-                                            />
+                                                <div className="grid grid-cols-3 gap-2 mt-2">
+                                                    <FormField control={form.control} name="hour" render={({ field }) => (
+                                                        <FormItem>
+                                                            <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                                                <FormControl><SelectTrigger><SelectValue placeholder="Hr" /></SelectTrigger></FormControl>
+                                                                <SelectContent>{Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )} />
+                                                    <FormField control={form.control} name="minute" render={({ field }) => (
+                                                        <FormItem>
+                                                            <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                                                <FormControl><SelectTrigger><SelectValue placeholder="Min" /></SelectTrigger></FormControl>
+                                                                <SelectContent>{Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )} />
+                                                    <FormField control={form.control} name="period" render={({ field }) => (
+                                                        <FormItem>
+                                                            <Select onValueChange={field.onChange} value={field.value as 'AM' | 'PM'} disabled={isProcessing}>
+                                                                <FormControl><SelectTrigger><SelectValue placeholder="AM/PM" /></SelectTrigger></FormControl>
+                                                                <SelectContent>
+                                                                    <SelectItem value="AM">AM</SelectItem>
+                                                                    <SelectItem value="PM">PM</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )} />
+                                                </div>
+                                                 <FormDescription className="mt-2">Or leave empty</FormDescription>
+                                            </div>
                                         </div>
                                         <div>
                                             <div className="flex justify-between items-center mb-2">
@@ -949,9 +1002,3 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
-
-
-    
-    
-
-    
