@@ -472,6 +472,14 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
              });
           }
       }
+      
+      // Clean up empty IFD blocks to prevent piexifjs errors
+      if (Object.keys(exifObj['1st'] || {}).length === 0) {
+        delete exifObj['1st'];
+      }
+      if (!exifObj.thumbnail) {
+        delete exifObj.thumbnail;
+      }
 
       const exifStr = piexif.dump(exifObj);
       
@@ -958,5 +966,3 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   );
 }
 
-
-    
