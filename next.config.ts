@@ -1,7 +1,12 @@
 import type {NextConfig} from 'next';
 
+const isGithubActions = process.env.GITHUB_ACTIONS === 'true';
+const repo = 'exiflab.app'; // Replace with your repository name
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'export',
+  assetPrefix: isGithubActions ? `/${repo}/` : '',
+  basePath: isGithubActions ? `/${repo}` : '',
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -9,6 +14,7 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

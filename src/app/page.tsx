@@ -10,7 +10,7 @@ import { useState } from 'react';
 
 export default function Home() {
   const [hasImage, setHasImage] = useState(false);
-  const [turnstileOk, setTurnstileOk] = useState(false);
+  const [turnstileOk, setTurnstileOk] = useState(true);
 
   return (
     <main 
@@ -40,7 +40,7 @@ export default function Home() {
           Modify your photo&apos;s meta data and control the digital footprint of it as you wish.
         </p>
       </div>
-      <div className="mt-8 w-full max-w-7xl flex-grow flex flex-col z-10">
+      <div className="mt-8 w-full max-w-screen-2xl flex-grow flex flex-col z-10">
         {turnstileOk ? (
           <PhotoFakeApp onFileSelect={(file) => setHasImage(!!file)} />
         ) : (
