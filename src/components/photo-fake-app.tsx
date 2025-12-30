@@ -132,7 +132,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
-  const [isEditing, setIsEditing] = React.useState(false);
   const [isNonJpeg, setIsNonJpeg] = React.useState(false);
   const [locationMessage, setLocationMessage] = React.useState("e.g., New York: 40.7128, -74.0060");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -302,7 +301,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       const newImageSrc = URL.createObjectURL(file);
       setImageSrc(newImageSrc);
       setModifiedImageSrc(null);
-      setIsEditing(false);
       setIsNonJpeg(file.type !== 'image/jpeg');
 
       const reader = new FileReader();
@@ -359,7 +357,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     onFileSelect(null);
     setModifiedImageSrc(null);
     setExistingExif(null);
-    setIsEditing(false);
     setIsNonJpeg(false);
     reset({
       deviceModel: "none",
@@ -379,13 +376,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       fileInputRef.current.value = "";
     }
   };
-  
-  const handleBackToEdit = () => {
-    if (modifiedImageSrc) {
-        URL.revokeObjectURL(modifiedImageSrc);
-    }
-    setModifiedImageSrc(null);
-  }
   
   const handleFetchLocation = () => {
     setIsFetchingLocation(true);
@@ -546,9 +536,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       if (exifObj.thumbnail === null || exifObj.thumbnail === undefined) {
         delete exifObj.thumbnail;
       }
-      if ('thumbnail' in exifObj && !exifObj.thumbnail) {
-        delete exifObj.thumbnail;
-      }
        if (Object.keys(exifObj['GPS'] || {}).length === 0) {
         delete exifObj['GPS'];
       }
@@ -565,7 +552,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
           title: "Success!",
           description: "Image metadata updated. You can now download the image.",
       });
-      setIsEditing(false);
     } catch (error) {
       console.error("Error processing image:", error);
       toast({
@@ -594,8 +580,12 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   
   const DiffRow = ({ label, oldValue, newValue }: {label:string, oldValue?: string | null, newValue?: string | null}) => {
     const displayOld = oldValue || 'N/A';
-    const displayNew = newValue || 'N/A';
-    if (displayOld === displayNew) return null;
+    let displayNew = newValue || 'N/A';
+
+    if (displayNew === 'REMOVED' && displayOld === 'N/A') {
+        return null;
+    }
+    if (displayOld === displayNew && displayNew !== 'REMOVED') return null;
 
     return (
         <div className="flex items-center justify-between py-2 border-b last:border-b-0 text-sm">
@@ -689,7 +679,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         { label: "Lens Model", oldValue: formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel), newValue: lensModel || (formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel) !== 'N/A' ? 'REMOVED' : 'N/A') },
     ];
 
-    const hasChanges = changes.some(c => c.oldValue !== c.newValue && c.newValue !== 'N/A');
+    const hasChanges = changes.some(c => c.newValue !== 'N/A' && c.oldValue !== c.newValue);
 
     if (!hasChanges) {
         return (
@@ -705,7 +695,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                 <CardTitle className="text-base">Changes Summary</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-                {changes.filter(c => c.oldValue !== c.newValue).map(change => (
+                {changes.filter(c => c.oldValue !== c.newValue && (c.newValue !== 'N/A' || c.oldValue !=='N/A')).map(change => (
                     <DiffRow key={change.label} label={change.label} oldValue={change.oldValue} newValue={change.newValue} />
                 ))}
             </CardContent>
@@ -720,13 +710,14 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     };
   }, [imageSrc, modifiedImageSrc]);
   
-  const handleRemoveAiFootprint = () => {
+  const handleRemoveAiFootprint = async () => {
     // This is a placeholder. In a real scenario, you'd identify and clear specific AI-related tags.
     // For now, let's assume it clears the 'Software' tag if it's not a known device profile.
     toast({ title: 'AI footprint fields cleared' });
+    await applyChanges(getValues());
   };
   
-  const handleRemovePrivacyFootprint = () => {
+  const handleRemovePrivacyFootprint = async () => {
     setValue('latitude', '');
     setValue('longitude', '');
     setValue('date', undefined);
@@ -734,9 +725,10 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     setValue('minute', undefined);
     setValue('period', undefined);
     toast({ title: 'Privacy footprint fields cleared' });
+    await applyChanges(getValues());
   };
 
-  const handleRemoveDeviceFootprint = () => {
+  const handleRemoveDeviceFootprint = async () => {
     setValue('deviceModel', 'none');
     setValue('fNumber', '');
     setValue('exposureTime', '');
@@ -744,6 +736,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     setValue('focalLength', '');
     setValue('lensModel', '');
     toast({ title: 'Device footprint fields cleared' });
+    await applyChanges(getValues());
   };
 
   const handleReloadMetadata = () => {
@@ -836,7 +829,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     <Card className="w-full max-w-4xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
             <motion.div
-                key={isEditing ? 'edit' : 'preview'}
+                key={'preview'}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -905,8 +898,8 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     </div>
                     
                     <div className="space-y-4">
-                        {!isEditing ? (
-                            <div className="space-y-4">
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-4 flex flex-col">
                                 <div>
                                     <Label className="text-sm font-medium">Quick Actions</Label>
                                     <div className="flex flex-wrap gap-2 mt-2">
@@ -917,184 +910,173 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                 </div>
                                 <Separator />
                                 <ChangesSummary />
-                                <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
-                                    <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
-                                </Button>
-                            </div>
-                        ) : (
-                            <Form {...form}>
-                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-4 flex flex-col">
+                                <FormField
+                                    control={form.control}
+                                    name="deviceModel"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="flex items-center gap-2"><Camera className="h-4 w-4" />Device Profile</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                            <SelectValue placeholder="Select a device or leave empty" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="none">None (Remove)</SelectItem>
+                                            {Object.keys(DEVICE_PROFILES).map((model) => (
+                                            <SelectItem key={model} value={model}>
+                                                {model}
+                                            </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                                <div className="grid grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
-                                        name="deviceModel"
-                                        render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="flex items-center gap-2"><Camera className="h-4 w-4" />Device Profile</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                <SelectValue placeholder="Select a device or leave empty" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="none">None (Remove)</SelectItem>
-                                                {Object.keys(DEVICE_PROFILES).map((model) => (
-                                                <SelectItem key={model} value={model}>
-                                                    {model}
-                                                </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                        )}
-                                    />
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <FormField
-                                            control={form.control}
-                                            name="fNumber"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Aperture (f-stop)</FormLabel>
-                                                    <FormControl><Input type="number" step="0.1" {...field} placeholder="e.g. 2.8" disabled={isProcessing}/></FormControl>
-                                                </FormItem>
-                                            )}/>
-                                        <FormField
-                                            control={form.control}
-                                            name="exposureTime"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Exposure Time</FormLabel>
-                                                    <FormControl><Input {...field} placeholder="e.g. 1/125" disabled={isProcessing}/></FormControl>
-                                                </FormItem>
-                                            )}/>
-                                    </div>
-                                     <div className="grid grid-cols-2 gap-4">
-                                        <FormField
-                                            control={form.control}
-                                            name="iso"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>ISO</FormLabel>
-                                                    <FormControl><Input type="number" {...field} placeholder="e.g. 100" disabled={isProcessing}/></FormControl>
-                                                </FormItem>
-                                            )}/>
-                                        <FormField
-                                            control={form.control}
-                                            name="focalLength"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Focal Length (mm)</FormLabel>
-                                                    <FormControl><Input type="number" {...field} placeholder="e.g. 50" disabled={isProcessing}/></FormControl>
-                                                </FormItem>
-                                            )}/>
-                                    </div>
-                                    <FormField
-                                        control={form.control}
-                                        name="lensModel"
+                                        name="fNumber"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Lens Model</FormLabel>
-                                                <FormControl><Input {...field} placeholder="e.g. EF50mm f/1.8 STM" disabled={isProcessing}/></FormControl>
+                                                <FormLabel>Aperture (f-stop)</FormLabel>
+                                                <FormControl><Input type="number" step="0.1" {...field} placeholder="e.g. 2.8" disabled={isProcessing}/></FormControl>
                                             </FormItem>
                                         )}/>
-                                    <Separator />
-                                    <div className="grid grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
-                                        name="date"
+                                        name="exposureTime"
                                         render={({ field }) => (
-                                            <FormItem className="flex flex-col">
-                                                <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
-                                                <Popover>
-                                                    <PopoverTrigger asChild>
-                                                        <FormControl>
-                                                            <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
-                                                                {field.value ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}
-                                                            </Button>
-                                                        </FormControl>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-auto p-0" align="start">
-                                                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
-                                                    </PopoverContent>
-                                                </Popover>
-                                                <FormDescription>Or leave empty</FormDescription>
+                                            <FormItem>
+                                                <FormLabel>Exposure Time</FormLabel>
+                                                <FormControl><Input {...field} placeholder="e.g. 1/125" disabled={isProcessing}/></FormControl>
+                                            </FormItem>
+                                        )}/>
+                                </div>
+                                 <div className="grid grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="iso"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>ISO</FormLabel>
+                                                <FormControl><Input type="number" {...field} placeholder="e.g. 100" disabled={isProcessing}/></FormControl>
+                                            </FormItem>
+                                        )}/>
+                                    <FormField
+                                        control={form.control}
+                                        name="focalLength"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Focal Length (mm)</FormLabel>
+                                                <FormControl><Input type="number" {...field} placeholder="e.g. 50" disabled={isProcessing}/></FormControl>
+                                            </FormItem>
+                                        )}/>
+                                </div>
+                                <FormField
+                                    control={form.control}
+                                    name="lensModel"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Lens Model</FormLabel>
+                                            <FormControl><Input {...field} placeholder="e.g. EF50mm f/1.8 STM" disabled={isProcessing}/></FormControl>
+                                        </FormItem>
+                                    )}/>
+                                <Separator />
+                                <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="date"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-col">
+                                            <FormLabel className="flex items-center gap-2"><CalendarIcon className="h-4 w-4" />Date</FormLabel>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <FormControl>
+                                                        <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isProcessing}>
+                                                            {field.value ? (format(field.value, "PPP")) : (<span>Pick a date</span>)}
+                                                        </Button>
+                                                    </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                                                </PopoverContent>
+                                            </Popover>
+                                            <FormDescription>Or leave empty</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                    <div>
+                                    <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" />Time</FormLabel>
+                                    <div className="grid grid-cols-3 gap-2 mt-2">
+                                        <FormField control={form.control} name="hour" render={({ field }) => (
+                                            <FormItem>
+                                                <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                                    <FormControl><SelectTrigger><SelectValue placeholder="Hr" /></SelectTrigger></FormControl>
+                                                    <SelectContent>{Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="minute" render={({ field }) => (
+                                            <FormItem>
+                                                <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
+                                                    <FormControl><SelectTrigger><SelectValue placeholder="Min" /></SelectTrigger></FormControl>
+                                                    <SelectContent>{Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="period" render={({ field }) => (
+                                            <FormItem>
+                                                <Select onValueChange={field.onChange} value={field.value as 'AM' | 'PM'} disabled={isProcessing}>
+                                                    <FormControl><SelectTrigger><SelectValue placeholder="AM/PM" /></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="AM">AM</SelectItem>
+                                                        <SelectItem value="PM">PM</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )} />
+                                    </div>
+                                        <FormDescription className="mt-2">Or leave empty</FormDescription>
+                                </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4" />Location</FormLabel>
+                                        <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isProcessing}>
+                                            {isFetchingLocation ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LocateFixed className="mr-2 h-4 w-4" />}
+                                            Use my location
+                                        </Button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormField control={form.control} name="latitude" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs text-muted-foreground">Latitude</FormLabel>
+                                                <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. 40.7128" disabled={isProcessing}/></FormControl>
                                                 <FormMessage />
                                             </FormItem>
-                                        )}
-                                    />
-                                        <div>
-                                        <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" />Time</FormLabel>
-                                        <div className="grid grid-cols-3 gap-2 mt-2">
-                                            <FormField control={form.control} name="hour" render={({ field }) => (
-                                                <FormItem>
-                                                    <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                                                        <FormControl><SelectTrigger><SelectValue placeholder="Hr" /></SelectTrigger></FormControl>
-                                                        <SelectContent>{Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )} />
-                                            <FormField control={form.control} name="minute" render={({ field }) => (
-                                                <FormItem>
-                                                    <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
-                                                        <FormControl><SelectTrigger><SelectValue placeholder="Min" /></SelectTrigger></FormControl>
-                                                        <SelectContent>{Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0')).map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )} />
-                                            <FormField control={form.control} name="period" render={({ field }) => (
-                                                <FormItem>
-                                                    <Select onValueChange={field.onChange} value={field.value as 'AM' | 'PM'} disabled={isProcessing}>
-                                                        <FormControl><SelectTrigger><SelectValue placeholder="AM/PM" /></SelectTrigger></FormControl>
-                                                        <SelectContent>
-                                                            <SelectItem value="AM">AM</SelectItem>
-                                                            <SelectItem value="PM">PM</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )} />
-                                        </div>
-                                            <FormDescription className="mt-2">Or leave empty</FormDescription>
+                                        )}/>
+                                        <FormField control={form.control} name="longitude" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs text-muted-foreground">Longitude</FormLabel>
+                                                <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. -74.006" disabled={isProcessing}/></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}/>
                                     </div>
-                                    </div>
-                                    <div>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4" />Location</FormLabel>
-                                            <Button type="button" variant="ghost" size="sm" onClick={handleFetchLocation} disabled={isFetchingLocation || isProcessing}>
-                                                {isFetchingLocation ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LocateFixed className="mr-2 h-4 w-4" />}
-                                                Use my location
-                                            </Button>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <FormField control={form.control} name="latitude" render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-xs text-muted-foreground">Latitude</FormLabel>
-                                                    <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. 40.7128" disabled={isProcessing}/></FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}/>
-                                            <FormField control={form.control} name="longitude" render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-xs text-muted-foreground">Longitude</FormLabel>
-                                                    <FormControl><Input type="number" step="0.0001" {...field} placeholder="e.g. -74.006" disabled={isProcessing}/></FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}/>
-                                        </div>
-                                        <FormDescription className="mt-2">{locationMessage}</FormDescription>
-                                    </div>
+                                    <FormDescription className="mt-2">{locationMessage}</FormDescription>
+                                </div>
 
-                                    <CardFooter className="flex justify-end p-0 pt-4 gap-2">
-                                        <Button onClick={() => setIsEditing(false)} variant="ghost">
-                                            Cancel
-                                        </Button>
-                                        <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
-                                            <Wand className="mr-2 h-4 w-4" /> Apply Changes
-                                        </Button>
-                                    </CardFooter>
-                                </form>
-                            </Form>
-                        )}
+                                <CardFooter className="flex justify-end p-0 pt-4 gap-2">
+                                    <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
+                                        <Wand className="mr-2 h-4 w-4" /> Apply Changes
+                                    </Button>
+                                </CardFooter>
+                            </form>
+                        </Form>
                     </div>
                 </CardContent>
             </motion.div>
