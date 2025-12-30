@@ -328,13 +328,15 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     setIsFetchingLocation(true);
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((position) => {
-            setValue('latitude', parseFloat(position.coords.latitude.toFixed(4)));
-            setValue('longitude', parseFloat(position.coords.longitude.toFixed(4)));
+            const lat = parseFloat(position.coords.latitude.toFixed(4));
+            const lon = parseFloat(position.coords.longitude.toFixed(4));
+            setValue('latitude', lat);
+            setValue('longitude', lon);
             toast({
                 title: "Location Updated",
                 description: "Your current location has been set.",
             });
-            setLocationMessage("Your current location has been applied.");
+            setLocationMessage(`Your current location (${lat}, ${lon}) has been applied.`);
             setIsFetchingLocation(false);
         }, (error) => {
             toast({
@@ -1002,3 +1004,5 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
+
+    
