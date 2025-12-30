@@ -15,14 +15,14 @@ export default function Home() {
   return (
     <main 
       className={cn(
-        "flex min-h-screen w-full flex-col items-center justify-center p-4 sm:p-8 transition-colors duration-1000 relative isolate overflow-hidden",
+        "flex min-h-screen w-full flex-col items-center justify-start py-12 px-4 sm:px-8 transition-colors duration-1000 relative isolate overflow-hidden",
         hasImage 
           ? "bg-gradient-to-br from-background to-muted/40"
           : "bg-slate-900"
       )}
     >
       <InteractiveBackground active={!hasImage} />
-      <div className="z-10 w-full max-w-5xl text-center flex flex-col items-center">
+      <div className="z-10 w-full max-w-6xl text-center flex flex-col items-center">
         <Badge variant="outline" className="mb-4 bg-card/50 backdrop-blur-sm text-white border-white/20">
             <Camera className="mr-2 h-3 w-3" />
             V1.0 Now Live
@@ -40,7 +40,7 @@ export default function Home() {
           Modify your photo&apos;s meta data and control the digital footprint of it as you wish.
         </p>
       </div>
-      <div className="mt-8 w-full max-w-4xl flex-grow flex flex-col z-10">
+      <div className="mt-8 w-full max-w-7xl flex-grow flex flex-col z-10">
         {turnstileOk ? (
           <PhotoFakeApp onFileSelect={(file) => setHasImage(!!file)} />
         ) : (

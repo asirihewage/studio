@@ -536,8 +536,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       if (focalLength) exifObj["Exif"][piexif.ExifIFD.FocalLength] = [focalLength, 1]; else delete exifObj["Exif"][piexif.ExifIFD.FocalLength];
       if (lensModel) exifObj["Exif"][piexif.ExifIFD.LensModel] = lensModel; else delete exifObj["Exif"][piexif.ExifIFD.LensModel];
       
-      // *** ROBUST CLEANUP V3 ***
-      // Aggressively delete any empty IFD blocks to prevent piexifjs errors.
+      // *** ROBUST CLEANUP V4 ***
       const ifdBlocks = ['0th', 'Exif', 'GPS', '1st'];
       for (const ifd of ifdBlocks) {
         if (exifObj[ifd] && Object.keys(exifObj[ifd]).length === 0) {
@@ -845,7 +844,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   }
 
   return (
-    <Card className="w-full max-w-4xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
+    <Card className="w-full max-w-7xl shadow-2xl bg-card/50 backdrop-blur-sm border-border/20 flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
             <motion.div
                 key={'preview'}
@@ -919,7 +918,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     
                     <div className="space-y-4">
                         <Form {...form}>
-                            <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-4 flex flex-col">
+                            <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-6 flex flex-col">
                                 <div>
                                     <Label className="text-sm font-medium">Quick Actions</Label>
                                     <div className="flex flex-wrap gap-2 mt-2">
@@ -955,7 +954,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                     </FormItem>
                                     )}
                                 />
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
                                         name="fNumber"
@@ -975,7 +974,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                             </FormItem>
                                         )}/>
                                 </div>
-                                 <div className="grid grid-cols-2 gap-4">
+                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
                                         name="iso"
@@ -1005,7 +1004,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                         </FormItem>
                                     )}/>
                                 <Separator />
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <FormField
                                     control={form.control}
                                     name="date"
@@ -1071,7 +1070,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                             Use my location
                                         </Button>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <FormField control={form.control} name="latitude" render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="text-xs text-muted-foreground">Latitude</FormLabel>
@@ -1104,5 +1103,3 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
-
-    
