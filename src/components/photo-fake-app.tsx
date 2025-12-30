@@ -263,7 +263,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     }
     
     const exposureTimeRaw = exifIfd[piexif.ExifIFD.ExposureTime];
-    if (exposureTimeRaw) {
+    if (exposureTimeRaw && exposureTimeRaw[1] !== 0) {
        defaultValues.exposureTime = exposureTimeRaw[0] === 1 ? `1/${exposureTimeRaw[1]}` : (exposureTimeRaw[0]/exposureTimeRaw[1]).toString();
     }
 
@@ -458,7 +458,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
           
       const { deviceModel, date, hour, minute, period, latitude, longitude, fNumber, exposureTime, iso, focalLength, lensModel } = values;
       
-      const exifObj = piexif.load(imageDataUrl) || {};
+      const exifObj = piexif.load(imageDataUrl) || { '0th': {}, 'Exif': {}, 'GPS': {}, '1st': {}, 'thumbnail': null };
       exifObj['0th'] = exifObj['0th'] || {};
       exifObj['Exif'] = exifObj['Exif'] || {};
       exifObj['GPS'] = exifObj['GPS'] || {};
@@ -522,7 +522,12 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       if (fNumber) exifObj["Exif"][piexif.ExifIFD.FNumber] = [Math.round(fNumber * 10), 10]; else delete exifObj["Exif"][piexif.ExifIFD.FNumber];
       if (exposureTime) {
         if(exposureTime.startsWith('1/')) {
-          exifObj["Exif"][piexif.ExifIFD.ExposureTime] = [1, parseInt(exposureTime.substring(2))];
+          const denominator = parseInt(exposureTime.substring(2));
+          if (!isNaN(denominator) && denominator > 0) {
+            exifObj["Exif"][piexif.ExifIFD.ExposureTime] = [1, denominator];
+          } else {
+            delete exifObj["Exif"][piexif.ExifIFD.ExposureTime];
+          }
         } else {
           // Handle non-fractional exposure times if needed
         }
@@ -531,13 +536,13 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       if (focalLength) exifObj["Exif"][piexif.ExifIFD.FocalLength] = [focalLength, 1]; else delete exifObj["Exif"][piexif.ExifIFD.FocalLength];
       if (lensModel) exifObj["Exif"][piexif.ExifIFD.LensModel] = lensModel; else delete exifObj["Exif"][piexif.ExifIFD.LensModel];
       
-      // *** ROBUST CLEANUP ***
-      // Clean up empty IFD blocks to prevent piexifjs errors
-      if (Object.keys(exifObj['GPS'] || {}).length === 0) {
-        delete exifObj['GPS'];
-      }
-      if (exifObj['1st'] && Object.keys(exifObj['1st']).length === 0) {
-        delete exifObj['1st'];
+      // *** ROBUST CLEANUP V3 ***
+      // Aggressively delete any empty IFD blocks to prevent piexifjs errors.
+      const ifdBlocks = ['0th', 'Exif', 'GPS', '1st'];
+      for (const ifd of ifdBlocks) {
+        if (exifObj[ifd] && Object.keys(exifObj[ifd]).length === 0) {
+          delete exifObj[ifd];
+        }
       }
       if (exifObj.thumbnail === null || exifObj.thumbnail === undefined) {
         delete exifObj.thumbnail;
@@ -652,7 +657,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         newDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
     } else if (date) {
         newDateTime = format(date, "yyyy:MM:dd HH:mm:ss");
-    } else if (oldDateTime !== 'N/A' && !date && !hour) {
+    } else if (oldDateTime !== 'N/A' && !date && !hour && watchedValues.date === undefined) {
         newDateTime = "REMOVED";
     }
 
@@ -675,16 +680,21 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         { label: "Device Model", oldValue: oldModel, newValue: newModel },
         { label: "Date/Time", oldValue: oldDateTime, newValue: newDateTime },
         { label: "Location", oldValue: oldLocation, newValue: newLocation },
-        { label: "Aperture", oldValue: formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber), newValue: fNumber ? `f/${fNumber}` : (formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber) !== 'N/A' ? 'REMOVED' : 'N/A') },
-        { label: "Exposure Time", oldValue: formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime), newValue: exposureTime || (formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime) !== 'N/A' ? 'REMOVED' : 'N/A') },
-        { label: "ISO", oldValue: formatOldValue('Exif', 'ISOSpeedRatings', piexif.ExifIFD.ISOSpeedRatings), newValue: iso ? iso.toString() : (formatOldValue('Exif', 'ISOSpeedRatings', piexif.ExifIFD.ISOSpeedRatings) !== 'N/A' ? 'REMOVED' : 'N/A') },
-        { label: "Focal Length", oldValue: formatOldValue('Exif', 'FocalLength', piexif.ExifIFD.FocalLength), newValue: focalLength ? `${focalLength}mm` : (formatOldValue('Exif', 'FocalLength', piexif.ExifIFD.FocalLength) !== 'N/A' ? 'REMOVED' : 'N/A') },
-        { label: "Lens Model", oldValue: formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel), newValue: lensModel || (formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel) !== 'N/A' ? 'REMOVED' : 'N/A') },
+        { label: "Aperture", oldValue: formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber), newValue: fNumber ? `f/${fNumber}` : (formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber) !== 'N/A' && watchedValues.fNumber === '' ? 'REMOVED' : 'N/A') },
+        { label: "Exposure Time", oldValue: formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime), newValue: exposureTime || (formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime) !== 'N/A' && watchedValues.exposureTime === '' ? 'REMOVED' : 'N/A') },
+        { label: "ISO", oldValue: formatOldValue('Exif', 'ISOSpeedRatings', piexif.ExifIFD.ISOSpeedRatings), newValue: iso ? iso.toString() : (formatOldValue('Exif', 'ISOSpeedRatings', piexif.ExifIFD.ISOSpeedRatings) !== 'N/A' && watchedValues.iso === '' ? 'REMOVED' : 'N/A') },
+        { label: "Focal Length", oldValue: formatOldValue('Exif', 'FocalLength', piexif.ExifIFD.FocalLength), newValue: focalLength ? `${focalLength}mm` : (formatOldValue('Exif', 'FocalLength', piexif.ExifIFD.FocalLength) !== 'N/A' && watchedValues.focalLength === '' ? 'REMOVED' : 'N/A') },
+        { label: "Lens Model", oldValue: formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel), newValue: lensModel || (formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel) !== 'N/A' && watchedValues.lensModel === '' ? 'REMOVED' : 'N/A') },
     ];
 
     const hasChanges = changes.some(c => {
-      if (c.newValue === 'REMOVED') return c.oldValue !== 'N/A';
-      return c.oldValue !== c.newValue && c.newValue !== 'N/A';
+      let oldVal = c.oldValue;
+      let newVal = c.newValue;
+      
+      if(newVal === "REMOVED") {
+          return oldVal !== 'N/A';
+      }
+      return oldVal !== newVal && newVal !== 'N/A';
     });
 
     if (!hasChanges) {
@@ -698,9 +708,13 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
             </CardHeader>
             <CardContent className="p-4 pt-0">
                 {changes.map(change => {
-                    if (change.newValue === 'REMOVED' && change.oldValue === 'N/A') return null;
-                    if (change.oldValue === change.newValue && change.newValue !== 'REMOVED') return null;
-                    if (change.newValue === 'N/A' && change.oldValue === 'N/A') return null;
+                    let oldVal = change.oldValue;
+                    let newVal = change.newValue;
+                     if(newVal === "REMOVED") {
+                        if (oldVal === 'N/A') return null;
+                    } else if (oldVal === newVal || newVal === 'N/A') {
+                        return null;
+                    }
                     return <DiffRow key={change.label} label={change.label} oldValue={change.oldValue} newValue={change.newValue} />
                 })}
             </CardContent>
