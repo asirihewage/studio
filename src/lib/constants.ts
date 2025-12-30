@@ -13,6 +13,18 @@ export type DeviceProfile = {
 };
 
 export const DEVICE_PROFILES: Record<string, DeviceProfile> = {
+  "Apple iPhone 15 Pro": {
+    make: "Apple",
+    model: "iPhone 15 Pro",
+    software: "17.4.1",
+    exif: {
+      FNumber: [18, 10], // f/1.8
+      ExposureTime: [1, 125],
+      ISOSpeedRatings: 32,
+      FocalLength: [24, 1], // 24mm
+      LensModel: "iPhone 15 Pro back camera 6.86mm f/1.78",
+    },
+  },
   "Google Pixel 8 Pro": {
     make: "Google",
     model: "Pixel 8 Pro",
@@ -35,18 +47,6 @@ export const DEVICE_PROFILES: Record<string, DeviceProfile> = {
       ISOSpeedRatings: 50,
       FocalLength: [23, 1], // 23mm
       LensModel: "Galaxy S24 Ultra",
-    },
-  },
-  "Apple iPhone 15 Pro": {
-    make: "Apple",
-    model: "iPhone 15 Pro",
-    software: "17.4.1",
-    exif: {
-      FNumber: [18, 10], // f/1.8
-      ExposureTime: [1, 125],
-      ISOSpeedRatings: 32,
-      FocalLength: [24, 1], // 24mm
-      LensModel: "iPhone 15 Pro back camera 6.86mm f/1.78",
     },
   },
   "OnePlus 12": {
@@ -76,26 +76,6 @@ export const DEVICE_PROFILES: Record<string, DeviceProfile> = {
       FNumber: [19, 10], // f/1.9
       ExposureTime: [1, 640],
       ISOSpeedRatings: 64,
-      FocalLength: [24, 1], // 24mm
-    },
-  },
-  "Asus ROG Phone 8 Pro": {
-    make: "Asus",
-    model: "ASUS_AI2401",
-    exif: {
-      FNumber: [19, 10], // f/1.9
-      ExposureTime: [1, 90],
-      ISOSpeedRatings: 25,
-      FocalLength: [24, 1], // 24mm
-    },
-  },
-  "Motorola Edge+ (2023)": {
-    make: "Motorola",
-    model: "motorola edge+ (2023)",
-    exif: {
-      FNumber: [16, 10], // f/1.6
-      ExposureTime: [1, 120],
-      ISOSpeedRatings: 100,
       FocalLength: [24, 1], // 24mm
     },
   },
@@ -188,47 +168,14 @@ export const DEVICE_PROFILES: Record<string, DeviceProfile> = {
       LensModel: "GF110mmF2 R LM WR",
     },
   },
-  "Kodak PIXPRO AZ401": {
-    make: "Kodak",
-    model: "PIXPRO AZ401",
-    exif: {
-      FNumber: [37, 10], // f/3.7
-      ExposureTime: [1, 160],
-      ISOSpeedRatings: 80,
-      FocalLength: [43, 10], // 4.3mm
-    },
-  },
-  "Kodak EASYSHARE Z981": {
-    make: "EASTMAN KODAK COMPANY",
-    model: "KODAK EASYSHARE Z981",
+  "DJI Mavic 3": {
+    make: "DJI",
+    model: "FC3411",
     exif: {
       FNumber: [28, 10], // f/2.8
-      ExposureTime: [1, 30],
-      ISOSpeedRatings: 64,
-      FocalLength: [46, 10], // 4.6mm
-    },
-  },
-  "Apple iPhone 13": {
-    make: "Apple",
-    model: "iPhone 13",
-    software: "16.1",
-    exif: {
-      FNumber: [16, 10], // f/1.6
-      ExposureTime: [1, 121],
-      ISOSpeedRatings: 50,
-      FocalLength: [42, 10], // 4.2mm
-    },
-  },
-  "Google Pixel 6": {
-    make: "Google",
-    model: "Pixel 6",
-    exif: {
-      FNumber: [185, 100], // f/1.85
-      ExposureTime: [1, 100],
-      ISOSpeedRatings: 42,
-      FocalLength: [681, 100], // 6.81mm
-    },
-  },
+      ExposureTime: [1, 800],
+      ISOSpeedRatings: 100,
+      FocalLength: [24, 1], // 24mm
+    }
+  }
 };
-
-    

@@ -163,7 +163,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     let latVal: number | '' = '';
     let lonVal: number | '' = '';
 
-    if (GPSHelper) {
+    if (GPSHelper && gps && gps[piexif.GPSIFD.GPSLatitude]) {
         try {
             const latRef = gps[piexif.GPSIFD.GPSLatitudeRef];
             const lat = gps[piexif.GPSIFD.GPSLatitude];
@@ -411,7 +411,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
           const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
           exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
           exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
-      } else {
+      } else if (!date && !time) {
         delete exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal];
         delete exifObj["Exif"][piexif.ExifIFD.CreateDate];
       }
@@ -511,7 +511,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     }
     const oldLocation = (oldLat !== 'N/A' && oldLon !== 'N/A') ? `${oldLat}, ${oldLon}` : 'N/A';
 
-    const newModel = deviceModel !== 'none' ? deviceModel : "REMOVED";
+    const newModel = deviceModel !== 'none' ? DEVICE_PROFILES[deviceModel]?.model || deviceModel : "REMOVED";
     
     let newDateTime = "N/A";
     if (date && time) {
