@@ -688,11 +688,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     });
 
     if (!hasChanges) {
-        return (
-            <div className="p-3 text-center text-sm text-muted-foreground border rounded-lg">
-                <p>Make a change to see a summary here.</p>
-            </div>
-        )
+        return null;
     }
 
     return (
