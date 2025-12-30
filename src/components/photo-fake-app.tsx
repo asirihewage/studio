@@ -335,7 +335,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
             setValue('longitude', lon);
             toast({
                 title: "Location Updated",
-                description: "Your current location has been set.",
+                description: `Your current location (${lat}, ${lon}) has been applied.`,
             });
             setLocationMessage(`Your current location (${lat}, ${lon}) has been applied.`);
             setIsFetchingLocation(false);
@@ -631,6 +631,8 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   }, [imageSrc, modifiedImageSrc]);
   
   const handleRemoveAiFootprint = () => {
+    // This is a placeholder. In a real scenario, you'd identify and clear specific AI-related tags.
+    // For now, let's assume it clears the 'Software' tag if it's not a known device profile.
     toast({ title: 'AI footprint fields cleared' });
   };
   
@@ -764,7 +766,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     <div className="space-y-4 flex flex-col h-full">
                         <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
                             <AnimatePresence>
-                                {modifiedImageSrc && !isEditing && (
+                                {modifiedImageSrc && (
                                     <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
@@ -778,12 +780,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                             fill
                                             style={{ objectFit: "contain" }}
                                         />
-                                        <div className="absolute bottom-2 right-2">
-                                            <Button onClick={() => setIsEditing(true)} size="sm">
-                                                <Pencil className="mr-2 h-4 w-4"/>
-                                                Edit More
-                                            </Button>
-                                        </div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -814,31 +810,28 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     </div>
                     
                     {!isEditing ? (
-                        <div className="space-y-6">
-                            <Form {...form}>
-                                <form onSubmit={form.handleSubmit(applyChanges)} className="space-y-4">
-                                    <div>
-                                        <Label className="text-sm font-medium">Quick Actions</Label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
-                                            <Button type="button" variant="outline" size="sm" onClick={handleRemoveAiFootprint}><BrainCircuit className="mr-2 h-4 w-4" /> Remove AI Footprint</Button>
-                                            <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacyFootprint}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy Footprint</Button>
-                                            <Button type="button" variant="outline" size="sm" onClick={handleRemoveDeviceFootprint}><Smartphone className="mr-2 h-4 w-4" /> Remove Device Footprint</Button>
-                                        </div>
-                                         <div className="mt-2">
-                                            <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata} className="w-full"><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original Metadata</Button>
-                                        </div>
-                                    </div>
-                                    <Separator />
-                                    <ChangesSummary />
-                                    <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
-                                        <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
-                                    </Button>
-                                    <Button type="submit" className="w-full mt-2 bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isProcessing}>
-                                        <Wand className="mr-2 h-4 w-4" /> Apply Changes & Preview
-                                    </Button>
-                                </form>
-                            </Form>
-                        </div>
+                         <div className="space-y-4">
+                             <Form {...form}>
+                                 <form onSubmit={form.handleSubmit(applyChanges)}>
+                                     <div>
+                                         <Label className="text-sm font-medium">Quick Actions</Label>
+                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                                             <Button type="button" variant="outline" size="sm" onClick={handleRemoveAiFootprint}><BrainCircuit className="mr-2 h-4 w-4" /> Remove AI Footprint</Button>
+                                             <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacyFootprint}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy</Button>
+                                             <Button type="button" variant="outline" size="sm" onClick={handleRemoveDeviceFootprint}><Smartphone className="mr-2 h-4 w-4" /> Remove Device</Button>
+                                         </div>
+                                          <div className="mt-2">
+                                             <Button type="button" variant="outline" size="sm" onClick={handleReloadMetadata} className="w-full"><RefreshCcw className="mr-2 h-3 w-3" /> Reload Original Metadata</Button>
+                                         </div>
+                                     </div>
+                                     <Separator />
+                                     <ChangesSummary />
+                                     <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
+                                         <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
+                                     </Button>
+                                 </form>
+                             </Form>
+                         </div>
                     ) : (
                         <div className="space-y-3">
                             <Form {...form}>
@@ -971,5 +964,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
+
 
     
