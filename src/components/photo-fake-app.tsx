@@ -123,6 +123,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   const [isDragging, setIsDragging] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [isNonJpeg, setIsNonJpeg] = React.useState(false);
+  const [locationMessage, setLocationMessage] = React.useState("e.g., New York: 40.7128, -74.0060");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -309,6 +310,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                 title: "Location Updated",
                 description: "Your current location has been set.",
             });
+            setLocationMessage("Your current location has been applied.");
             setIsFetchingLocation(false);
         }, (error) => {
             toast({
@@ -881,7 +883,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                                     </FormItem>
                                                 )}/>
                                             </div>
-                                            <FormDescription className="mt-2">e.g., New York: 40.7128, -74.0060</FormDescription>
+                                            <FormDescription className="mt-2">{locationMessage}</FormDescription>
                                         </div>
 
                                         <CardFooter className="flex justify-end p-0 pt-4 gap-2">
@@ -905,4 +907,5 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
 }
 
 
+    
     
