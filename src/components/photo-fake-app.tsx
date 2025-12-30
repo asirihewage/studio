@@ -461,7 +461,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       const exifObj = piexif.load(imageDataUrl) || {};
       exifObj['0th'] = exifObj['0th'] || {};
       exifObj['Exif'] = exifObj['Exif'] || {};
-      exifObj['GPS'] = {}; // Always clear GPS to start fresh
+      exifObj['GPS'] = exifObj['GPS'] || {};
       
       // Always set software to ExifLab unless a device profile with software is chosen
       exifObj["0th"][piexif.ImageIFD.Software] = "ExifLab";
@@ -514,6 +514,8 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                 description: "Could not process GPS coordinates. They may be invalid.",
              });
           }
+      } else {
+         exifObj['GPS'] = {};
       }
 
       // Handle new EXIF fields
@@ -529,17 +531,18 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       if (focalLength) exifObj["Exif"][piexif.ExifIFD.FocalLength] = [focalLength, 1]; else delete exifObj["Exif"][piexif.ExifIFD.FocalLength];
       if (lensModel) exifObj["Exif"][piexif.ExifIFD.LensModel] = lensModel; else delete exifObj["Exif"][piexif.ExifIFD.LensModel];
       
+      // *** ROBUST CLEANUP ***
       // Clean up empty IFD blocks to prevent piexifjs errors
+      if (Object.keys(exifObj['GPS'] || {}).length === 0) {
+        delete exifObj['GPS'];
+      }
       if (exifObj['1st'] && Object.keys(exifObj['1st']).length === 0) {
         delete exifObj['1st'];
       }
       if (exifObj.thumbnail === null || exifObj.thumbnail === undefined) {
         delete exifObj.thumbnail;
       }
-       if (Object.keys(exifObj['GPS'] || {}).length === 0) {
-        delete exifObj['GPS'];
-      }
-
+      
       const exifStr = piexif.dump(exifObj);
       
       const cleanDataUrl = piexif.remove(imageDataUrl);
@@ -679,7 +682,10 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         { label: "Lens Model", oldValue: formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel), newValue: lensModel || (formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel) !== 'N/A' ? 'REMOVED' : 'N/A') },
     ];
 
-    const hasChanges = changes.some(c => c.newValue !== 'N/A' && c.oldValue !== c.newValue);
+    const hasChanges = changes.some(c => {
+      if (c.newValue === 'REMOVED') return c.oldValue !== 'N/A';
+      return c.oldValue !== c.newValue && c.newValue !== 'N/A';
+    });
 
     if (!hasChanges) {
         return (
@@ -695,9 +701,12 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                 <CardTitle className="text-base">Changes Summary</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-                {changes.filter(c => c.oldValue !== c.newValue && (c.newValue !== 'N/A' || c.oldValue !=='N/A')).map(change => (
-                    <DiffRow key={change.label} label={change.label} oldValue={change.oldValue} newValue={change.newValue} />
-                ))}
+                {changes.map(change => {
+                    if (change.newValue === 'REMOVED' && change.oldValue === 'N/A') return null;
+                    if (change.oldValue === change.newValue && change.newValue !== 'REMOVED') return null;
+                    if (change.newValue === 'N/A' && change.oldValue === 'N/A') return null;
+                    return <DiffRow key={change.label} label={change.label} oldValue={change.oldValue} newValue={change.newValue} />
+                })}
             </CardContent>
         </Card>
     );
@@ -895,7 +904,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                 {renderExifData()}
                             </CardContent>
                         </Card>
-                        <ChangesSummary />
+                         <ChangesSummary />
                     </div>
                     
                     <div className="space-y-4">
@@ -1085,6 +1094,5 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
-
 
     
