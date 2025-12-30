@@ -769,7 +769,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     <div className="space-y-4 flex flex-col h-full">
                         <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
                             <AnimatePresence>
-                                {modifiedImageSrc && isEditing && (
+                                {modifiedImageSrc && !isEditing && (
                                     <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
@@ -783,6 +783,12 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                             fill
                                             style={{ objectFit: "contain" }}
                                         />
+                                        <div className="absolute bottom-2 right-2">
+                                            <Button onClick={() => setIsEditing(true)} size="sm">
+                                                <Pencil className="mr-2 h-4 w-4"/>
+                                                Edit More
+                                            </Button>
+                                        </div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -798,12 +804,13 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                 </div>
                             )}
                         </div>
+                        
                         {isEditing ? (
                             <div className="flex-grow flex flex-col min-h-0">
                                 <ChangesSummary />
                             </div>
                         ) : (
-                            <Card className="flex-grow flex flex-col min-h-0">
+                             <Card className="flex-grow flex flex-col min-h-0">
                                 <CardHeader>
                                     <CardTitle className="text-lg">Original Metadata</CardTitle>
                                     <CardDescription>
@@ -823,28 +830,13 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                 <CardHeader>
                                     <CardTitle>Ready to Edit?</CardTitle>
                                     <CardDescription>
-                                        You can modify the metadata yourself or use one of our quick actions to get started.
+                                        Click the button below to start modifying your image's metadata.
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                         <Button onClick={() => setIsEditing(true)} className="w-full bg-primary hover:bg-primary/90">
-                                        <Pencil className="mr-2 h-4 w-4" /> Edit Myself
+                                        <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
                                     </Button>
-                                </CardContent>
-                            </Card>
-                            <Card>
-                                <CardHeader>
-                                        <CardTitle>Quick Actions</CardTitle>
-                                    <CardDescription>
-                                        Apply common metadata changes with one click.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-2">
-                                        <Button type="button" variant="outline" className="w-full justify-start" onClick={handleRemovePrivacy}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy Data</Button>
-                                        <p className="text-xs text-muted-foreground px-2">Clears location, date, and time fields.</p>
-                                        <Separator className="my-2"/>
-                                        <Button type="button" variant="outline" className="w-full justify-start" onClick={handleRemoveAi}><BrainCircuit className="mr-2 h-4 w-4" /> Remove Device Footprint</Button>
-                                        <p className="text-xs text-muted-foreground px-2">Clears device make and model fields.</p>
                                 </CardContent>
                             </Card>
                         </div>
@@ -859,12 +851,13 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                             <Button type="button" variant="destructive" size="sm" onClick={handleRemoveAll}><Trash2 className="mr-2 h-3 w-3" /> Clear All</Button>
                                         </div>
                                     </div>
+                                    <Separator/>
                                     <FormField
                                         control={form.control}
                                         name="deviceModel"
                                         render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="flex items-center gap-2"><Camera className="h-4 w-4" />Device Model</FormLabel>
+                                            <FormLabel className="flex items-center gap-2"><Camera className="h-4 w-4" />Device Profile</FormLabel>
                                             <Select onValueChange={field.onChange} value={field.value} disabled={isProcessing}>
                                             <FormControl>
                                                 <SelectTrigger>
@@ -987,3 +980,5 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
+
+    
