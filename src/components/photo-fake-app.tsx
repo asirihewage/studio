@@ -186,7 +186,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   }, [watch, setValue]);
 
   const populateFormFromExif = (exif: ExifData | null) => {
-    const defaultValues = {
+    const defaultValues: z.infer<typeof formSchema> = {
         deviceModel: "none",
         date: undefined,
         hour: undefined,
@@ -546,6 +546,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       if (exifObj.thumbnail === null || exifObj.thumbnail === undefined) {
         delete exifObj.thumbnail;
       }
+      if ('thumbnail' in exifObj && !exifObj.thumbnail) {
+        delete exifObj.thumbnail;
+      }
        if (Object.keys(exifObj['GPS'] || {}).length === 0) {
         delete exifObj['GPS'];
       }
@@ -617,12 +620,14 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     
     const formatOldValue = (ifd: '0th' | 'Exif' | 'GPS', tagName: string, tagId: number) => {
         const value = getOldExifValue(ifd, tagId);
+        // Only return N/A if value is truly undefined or null
+        if (value === undefined || value === null) return 'N/A';
         return formatExifValue(ifd, tagName, value);
     };
 
     let oldLat = 'N/A';
     let oldLon = 'N/A';
-    if (GPSHelper && oldExif.GPS) {
+    if (GPSHelper && oldExif.GPS && oldExif.GPS[piexif.GPSIFD.GPSLatitude]) {
         try {
             const latRef = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitudeRef];
             const lat = oldExif['GPS']?.[piexif.GPSIFD.GPSLatitude];
@@ -638,9 +643,10 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     }
     const oldLocation = (oldLat !== 'N/A' && oldLon !== 'N/A') ? `${oldLat}, ${oldLon}` : 'N/A';
 
-    const newProfile = deviceModel !== 'none' ? DEVICE_PROFILES[deviceModel] : null;
+    const newProfile = deviceModel && deviceModel !== 'none' ? DEVICE_PROFILES[deviceModel] : null;
 
     let newDateTime = "N/A";
+    const oldDateTime = formatOldValue('Exif', 'DateTimeOriginal', piexif.ExifIFD.DateTimeOriginal);
     if (date && hour && minute && period) {
         let hours24 = parseInt(hour, 10);
         if (period === 'PM' && hours24 !== 12) {
@@ -653,7 +659,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         newDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
     } else if (date) {
         newDateTime = format(date, "yyyy:MM:dd HH:mm:ss");
-    } else if (getOldExifValue('Exif', piexif.ExifIFD.DateTimeOriginal) && !date && !hour) {
+    } else if (oldDateTime !== 'N/A' && !date && !hour) {
         newDateTime = "REMOVED";
     }
 
@@ -674,7 +680,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     
     const changes = [
         { label: "Device Model", oldValue: oldModel, newValue: newModel },
-        { label: "Date/Time", oldValue: formatOldValue('Exif', 'DateTimeOriginal', piexif.ExifIFD.DateTimeOriginal), newValue: newDateTime },
+        { label: "Date/Time", oldValue: oldDateTime, newValue: newDateTime },
         { label: "Location", oldValue: oldLocation, newValue: newLocation },
         { label: "Aperture", oldValue: formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber), newValue: fNumber ? `f/${fNumber}` : (formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber) !== 'N/A' ? 'REMOVED' : 'N/A') },
         { label: "Exposure Time", oldValue: formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime), newValue: exposureTime || (formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime) !== 'N/A' ? 'REMOVED' : 'N/A') },
@@ -683,7 +689,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         { label: "Lens Model", oldValue: formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel), newValue: lensModel || (formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel) !== 'N/A' ? 'REMOVED' : 'N/A') },
     ];
 
-    const hasChanges = changes.some(c => c.oldValue !== c.newValue);
+    const hasChanges = changes.some(c => c.oldValue !== c.newValue && c.newValue !== 'N/A');
 
     if (!hasChanges) {
         return (
@@ -699,7 +705,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                 <CardTitle className="text-base">Changes Summary</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-                {changes.map(change => (
+                {changes.filter(c => c.oldValue !== c.newValue).map(change => (
                     <DiffRow key={change.label} label={change.label} oldValue={change.oldValue} newValue={change.newValue} />
                 ))}
             </CardContent>
@@ -732,6 +738,11 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
 
   const handleRemoveDeviceFootprint = () => {
     setValue('deviceModel', 'none');
+    setValue('fNumber', '');
+    setValue('exposureTime', '');
+    setValue('iso', '');
+    setValue('focalLength', '');
+    setValue('lensModel', '');
     toast({ title: 'Device footprint fields cleared' });
   };
 
@@ -898,8 +909,8 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                             <div className="space-y-4">
                                 <div>
                                     <Label className="text-sm font-medium">Quick Actions</Label>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
-                                        <Button type="button" variant="outline" size="sm" onClick={handleRemoveAiFootprint}><BrainCircuit className="mr-2 h-4 w-4" /> Remove AI</Button>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        <Button type="button" variant="outline" size="sm" onClick={handleRemoveAiFootprint}><BrainCircuit className="mr-2 h-4 w-4" /> Remove AI Footprint</Button>
                                         <Button type="button" variant="outline" size="sm" onClick={handleRemovePrivacyFootprint}><ShieldOff className="mr-2 h-4 w-4" /> Remove Privacy</Button>
                                         <Button type="button" variant="outline" size="sm" onClick={handleRemoveDeviceFootprint}><Smartphone className="mr-2 h-4 w-4" /> Remove Device</Button>
                                     </div>
