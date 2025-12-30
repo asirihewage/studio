@@ -186,21 +186,23 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   }, [watch, setValue]);
 
   const populateFormFromExif = (exif: ExifData | null) => {
-    if (!exif) {
-      reset({
+    const defaultValues = {
         deviceModel: "none",
         date: undefined,
         hour: undefined,
         minute: undefined,
         period: undefined,
-        latitude: '',
-        longitude: '',
-        fNumber: '',
+        latitude: '' as const,
+        longitude: '' as const,
+        fNumber: '' as const,
         exposureTime: '',
-        iso: '',
-        focalLength: '',
+        iso: '' as const,
+        focalLength: '' as const,
         lensModel: '',
-      });
+    };
+
+    if (!exif) {
+      reset(defaultValues);
       return;
     };
     
@@ -215,8 +217,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         GPSHelper = (piexif as any).default?.GPSHelper;
     }
 
-    let latVal: number | '' = '';
-    let lonVal: number | '' = '';
+    if (model) {
+        defaultValues.deviceModel = model;
+    }
 
     if (GPSHelper && gps && gps[piexif.GPSIFD.GPSLatitude]) {
         try {
@@ -226,31 +229,26 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
             const lon = gps[piexif.GPSIFD.GPSLongitude];
 
             if (lat && latRef) {
-                latVal = parseFloat(GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
+                defaultValues.latitude = parseFloat(GPSHelper.dmsToDeg(lat, latRef).toFixed(4));
             }
             if (lon && lonRef) {
-                lonVal = parseFloat(GPSHelper.dmsToDeg(lon, lonRef).toFixed(4));
+                defaultValues.longitude = parseFloat(GPSHelper.dmsToDeg(lon, lonRef).toFixed(4));
             }
         } catch(e) {
             console.error("Could not parse GPS coordinates from EXIF", e)
         }
     }
 
-    let dateVal: Date | undefined = undefined;
-    let hourVal: string | undefined = undefined;
-    let minuteVal: string | undefined = undefined;
-    let periodVal: 'AM' | 'PM' | undefined = undefined;
-
     if (dateTime) {
         try {
             const parsedDate = new Date(dateTime.replace(/:/, '-').replace(/:/, '-'));
             if (!isNaN(parsedDate.getTime())) {
-                dateVal = parsedDate;
+                defaultValues.date = parsedDate;
                 const hours24 = parsedDate.getHours();
-                periodVal = hours24 >= 12 ? 'PM' : 'AM';
+                defaultValues.period = hours24 >= 12 ? 'PM' : 'AM';
                 const hours12 = hours24 % 12 || 12;
-                hourVal = String(hours12).padStart(2, '0');
-                minuteVal = String(parsedDate.getMinutes()).padStart(2, '0');
+                defaultValues.hour = String(hours12).padStart(2, '0');
+                defaultValues.minute = String(parsedDate.getMinutes()).padStart(2, '0');
             }
         } catch (e) {
             console.error("Could not parse date from EXIF", e);
@@ -258,28 +256,29 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     }
     
     const fNumberRaw = exifIfd[piexif.ExifIFD.FNumber];
-    const fNumberVal = fNumberRaw ? parseFloat((fNumberRaw[0] / fNumberRaw[1]).toFixed(1)) : '';
+    if (fNumberRaw) {
+        defaultValues.fNumber = parseFloat((fNumberRaw[0] / fNumberRaw[1]).toFixed(1));
+    }
     
     const exposureTimeRaw = exifIfd[piexif.ExifIFD.ExposureTime];
-    const exposureTimeVal = exposureTimeRaw ? (exposureTimeRaw[0] === 1 ? `1/${exposureTimeRaw[1]}` : (exposureTimeRaw[0]/exposureTimeRaw[1]).toString()) : '';
+    if (exposureTimeRaw) {
+       defaultValues.exposureTime = exposureTimeRaw[0] === 1 ? `1/${exposureTimeRaw[1]}` : (exposureTimeRaw[0]/exposureTimeRaw[1]).toString();
+    }
 
     const focalLengthRaw = exifIfd[piexif.ExifIFD.FocalLength];
-    const focalLengthVal = focalLengthRaw ? focalLengthRaw[0] / focalLengthRaw[1] : '';
+    if(focalLengthRaw) {
+       defaultValues.focalLength = focalLengthRaw[0] / focalLengthRaw[1];
+    }
 
-    reset({
-      deviceModel: model || "none",
-      date: dateVal,
-      hour: hourVal,
-      minute: minuteVal,
-      period: periodVal,
-      latitude: latVal,
-      longitude: lonVal,
-      fNumber: fNumberVal,
-      exposureTime: exposureTimeVal,
-      iso: exifIfd[piexif.ExifIFD.ISOSpeedRatings] || '',
-      focalLength: focalLengthVal,
-      lensModel: exifIfd[piexif.ExifIFD.LensModel] || '',
-    });
+    if (exifIfd[piexif.ExifIFD.ISOSpeedRatings]) {
+        defaultValues.iso = exifIfd[piexif.ExifIFD.ISOSpeedRatings];
+    }
+    
+    if (exifIfd[piexif.ExifIFD.LensModel]) {
+        defaultValues.lensModel = exifIfd[piexif.ExifIFD.LensModel];
+    }
+
+    reset(defaultValues);
   };
 
   const handleFileSelectInternal = (file: File | null | undefined) => {
@@ -541,7 +540,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       if (exifObj['1st'] && Object.keys(exifObj['1st']).length === 0) {
         delete exifObj['1st'];
       }
-      if (exifObj.thumbnail && (exifObj.thumbnail === null || exifObj.thumbnail === undefined)) {
+      if (exifObj.thumbnail === null || exifObj.thumbnail === undefined) {
         delete exifObj.thumbnail;
       }
        if (Object.keys(exifObj['GPS'] || {}).length === 0) {
