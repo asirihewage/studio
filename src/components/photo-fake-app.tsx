@@ -123,6 +123,21 @@ const formatExifValue = (ifd: string, tag: string, value: any): string => {
     return String(value);
 };
 
+const ScanAnimation = () => (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-20 pointer-events-none"
+    >
+      <motion.div
+        className="absolute left-0 right-0 h-1 bg-primary/50 shadow-[0_0_10px_2px_hsl(var(--primary))]"
+        initial={{ top: '0%' }}
+        animate={{ top: '100%' }}
+        transition={{ duration: 1, ease: 'linear' }}
+      />
+    </motion.div>
+  );
 
 export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | null) => void }) {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
@@ -133,6 +148,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   const [isFetchingLocation, setIsFetchingLocation] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [isNonJpeg, setIsNonJpeg] = React.useState(false);
+  const [isScanning, setIsScanning] = React.useState(false);
   const [locationMessage, setLocationMessage] = React.useState("e.g., New York: 40.7128, -74.0060");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -157,6 +173,18 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
 
   const { watch, setValue, reset, getValues } = form;
   const watchedValues = watch();
+
+  React.useEffect(() => {
+    if (imageFile) {
+        setIsScanning(true);
+        const timer = setTimeout(() => {
+            setIsScanning(false);
+        }, 1000); // Scan for 1 second
+
+        return () => clearTimeout(timer);
+    }
+  }, [imageFile]);
+
 
   const populateFormWithProfile = (profile: DeviceProfile | null) => {
     if (profile) {
@@ -277,7 +305,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     }
     
     if (exifIfd[piexif.ExifIFD.LensModel]) {
-        defaultValues.lensModel = exifIfd[piexif.ExifIFD.LensModel] as string;
+        defaultValues.lensModel = (exifIfd[piexif.ExifIFD.LensModel] as string).replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
     }
 
     reset(defaultValues);
@@ -536,7 +564,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
       if (focalLength) exifObj["Exif"][piexif.ExifIFD.FocalLength] = [focalLength, 1]; else delete exifObj["Exif"][piexif.ExifIFD.FocalLength];
       if (lensModel) exifObj["Exif"][piexif.ExifIFD.LensModel] = lensModel; else delete exifObj["Exif"][piexif.ExifIFD.LensModel];
       
-      // *** ROBUST CLEANUP V4 ***
+      // Robust cleanup
       const ifdBlocks = ['0th', 'Exif', 'GPS', '1st'];
       for (const ifd of ifdBlocks) {
         if (exifObj[ifd] && Object.keys(exifObj[ifd]).length === 0) {
@@ -617,7 +645,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     
     const formatOldValue = (ifd: '0th' | 'Exif' | 'GPS', tagName: string, tagId: number) => {
         const value = getOldExifValue(ifd, tagId);
-        // Only return N/A if value is truly undefined or null
         if (value === undefined || value === null) return 'N/A';
         return formatExifValue(ifd, tagName, value);
     };
@@ -656,7 +683,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
         newDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
     } else if (date) {
         newDateTime = format(date, "yyyy:MM:dd HH:mm:ss");
-    } else if (oldDateTime !== 'N/A' && !date && !hour && watchedValues.date === undefined) {
+    } else if (oldDateTime !== 'N/A' && watchedValues.date === undefined && (watchedValues.hour === undefined || watchedValues.hour === '')) {
         newDateTime = "REMOVED";
     }
 
@@ -871,6 +898,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                 <CardContent className="p-6 pt-0 grid md:grid-cols-2 gap-8 items-start flex-grow min-h-0">
                     <div className="space-y-4 flex flex-col h-full">
                         <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                             <AnimatePresence>
+                                {isScanning && <ScanAnimation />}
+                            </AnimatePresence>
                             <AnimatePresence>
                                 {modifiedImageSrc && (
                                     <motion.div
@@ -895,7 +925,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                 fill
                                 style={{ objectFit: "contain" }}
                             />
-                            {isProcessing && (
+                            {isProcessing && !isScanning && (
                                 <div className="absolute inset-0 z-20 bg-background/80 flex items-center justify-center">
                                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                 </div>
@@ -1103,3 +1133,5 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     </Card>
   );
 }
+
+    
