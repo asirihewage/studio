@@ -94,7 +94,9 @@ const formatExifValue = (ifd: string, tag: string, value: any): string => {
     
     if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'number' && value[1] !== 0) {
         if (tag === 'ExposureTime' && value[0] === 1) return `1/${value[1]}`;
-        return `f/${(value[0] / value[1]).toFixed(1)}`;
+        if (tag === 'FNumber') return `f/${(value[0] / value[1]).toFixed(1)}`;
+        if (tag === 'FocalLength') return `${(value[0] / value[1]).toFixed(0)}mm`;
+        return `${(value[0] / value[1]).toFixed(1)}`;
     }
 
     if (typeof value === 'string') {
@@ -159,7 +161,11 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     const model = zeroth[piexif.ImageIFD.Model] as string | undefined;
     const dateTime = exifIfd[piexif.ExifIFD.DateTimeOriginal] as string | undefined;
     
-    const GPSHelper = (piexif as any).GPSHelper;
+    let GPSHelper: any = (piexif as any).GPSHelper;
+    if (!(GPSHelper && 'dmsToDeg' in GPSHelper)) {
+        GPSHelper = (piexif as any).default?.GPSHelper;
+    }
+
     let latVal: number | '' = '';
     let lonVal: number | '' = '';
 
@@ -283,8 +289,8 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     setIsNonJpeg(false);
     reset({
       deviceModel: "none",
-      date: new Date(),
-      time: format(new Date(), "HH:mm"),
+      date: undefined,
+      time: "",
       latitude: '',
       longitude: '',
     });
@@ -359,7 +365,10 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     if (!imageFile || !imageSrc) return;
     setIsProcessing(true);
     
-    const GPSHelper = (piexif as any).GPSHelper;
+    let GPSHelper: any = (piexif as any).GPSHelper;
+    if (!(GPSHelper && 'degToDms' in GPSHelper)) {
+        GPSHelper = (piexif as any).default?.GPSHelper;
+    }
 
     try {
       let imageDataUrl: string;
@@ -411,7 +420,12 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
           const formattedDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
           exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
           exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
-      } else if (!date && !time) {
+      } else if (date) {
+        // Date but no time
+        const formattedDateTime = format(date, "yyyy:MM:dd HH:mm:ss");
+        exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = formattedDateTime;
+        exifObj["Exif"][piexif.ExifIFD.CreateDate] = formattedDateTime;
+      } else {
         delete exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal];
         delete exifObj["Exif"][piexif.ExifIFD.CreateDate];
       }
@@ -489,10 +503,19 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
   const ChangesSummary = () => {
     const { deviceModel, date, time, latitude, longitude } = watchedValues;
     const oldExif = existingExif || { '0th': {}, Exif: {}, GPS: {} };
-    const oldModel = oldExif['0th']?.[piexif.ImageIFD.Model] || 'N/A';
-    const oldDateTime = oldExif['Exif']?.[piexif.ExifIFD.DateTimeOriginal] || 'N/A';
     
-    const GPSHelper = (piexif as any).GPSHelper;
+    const getOldExifValue = (ifd: '0th' | 'Exif' | 'GPS', tagId: number): any => oldExif[ifd]?.[tagId];
+
+    let GPSHelper: any = (piexif as any).GPSHelper;
+    if (!(GPSHelper && 'dmsToDeg' in GPSHelper)) {
+        GPSHelper = (piexif as any).default?.GPSHelper;
+    }
+    
+    const formatOldValue = (ifd: '0th' | 'Exif' | 'GPS', tagName: string, tagId: number) => {
+        const value = getOldExifValue(ifd, tagId);
+        return formatExifValue(ifd, tagName, value);
+    };
+
     let oldLat = 'N/A';
     let oldLon = 'N/A';
     if (GPSHelper && oldExif.GPS) {
@@ -511,21 +534,40 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
     }
     const oldLocation = (oldLat !== 'N/A' && oldLon !== 'N/A') ? `${oldLat}, ${oldLon}` : 'N/A';
 
-    const newModel = deviceModel !== 'none' ? DEVICE_PROFILES[deviceModel]?.model || deviceModel : "REMOVED";
-    
+    const newProfile = deviceModel !== 'none' ? DEVICE_PROFILES[deviceModel] : null;
+
     let newDateTime = "N/A";
     if (date && time) {
         const [hours, minutes] = time.split(":").map(Number);
         const combinedDateTime = new Date(date);
         combinedDateTime.setHours(hours, minutes, 0, 0);
         newDateTime = format(combinedDateTime, "yyyy:MM:dd HH:mm:ss");
+    } else if (date) {
+        newDateTime = format(date, "yyyy:MM:dd HH:mm:ss");
     } else if (!date && !time) {
         newDateTime = "REMOVED";
     }
 
     const newLocation = (latitude !== '' && longitude !== '') ? `${latitude}, ${longitude}` : 'REMOVED';
 
-    const hasChanges = newModel !== oldModel || newDateTime !== oldDateTime || newLocation !== oldLocation;
+    const oldModel = formatOldValue('0th', 'Model', piexif.ImageIFD.Model);
+    const newModel = newProfile ? newProfile.model : 'REMOVED';
+    
+    const changes = [
+        { label: "Device Model", oldValue: oldModel, newValue: newModel },
+        { label: "Date/Time", oldValue: formatOldValue('Exif', 'DateTimeOriginal', piexif.ExifIFD.DateTimeOriginal), newValue: newDateTime },
+        { label: "Location", oldValue: oldLocation, newValue: newLocation },
+    ];
+    
+    if (newProfile) {
+        if(newProfile.exif.FNumber) changes.push({ label: "Aperture", oldValue: formatOldValue('Exif', 'FNumber', piexif.ExifIFD.FNumber), newValue: formatExifValue('Exif', 'FNumber', newProfile.exif.FNumber) });
+        if(newProfile.exif.ExposureTime) changes.push({ label: "Exposure Time", oldValue: formatOldValue('Exif', 'ExposureTime', piexif.ExifIFD.ExposureTime), newValue: formatExifValue('Exif', 'ExposureTime', newProfile.exif.ExposureTime) });
+        if(newProfile.exif.ISOSpeedRatings) changes.push({ label: "ISO", oldValue: formatOldValue('Exif', 'ISOSpeedRatings', piexif.ExifIFD.ISOSpeedRatings), newValue: newProfile.exif.ISOSpeedRatings.toString() });
+        if(newProfile.exif.FocalLength) changes.push({ label: "Focal Length", oldValue: formatOldValue('Exif', 'FocalLength', piexif.ExifIFD.FocalLength), newValue: formatExifValue('Exif', 'FocalLength', newProfile.exif.FocalLength) });
+        if(newProfile.exif.LensModel) changes.push({ label: "Lens Model", oldValue: formatOldValue('Exif', 'LensModel', piexif.ExifIFD.LensModel), newValue: newProfile.exif.LensModel });
+    }
+
+    const hasChanges = changes.some(c => c.oldValue !== c.newValue);
 
     if (!hasChanges) {
         return (
@@ -541,9 +583,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                 <CardTitle className="text-base">Changes Summary</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-                <DiffRow label="Device Model" oldValue={oldModel} newValue={newModel} />
-                <DiffRow label="Date/Time" oldValue={oldDateTime} newValue={newDateTime} />
-                <DiffRow label="Location" oldValue={oldLocation} newValue={newLocation} />
+                {changes.map(change => (
+                    <DiffRow key={change.label} label={change.label} oldValue={change.oldValue} newValue={change.newValue} />
+                ))}
             </CardContent>
         </Card>
     );
@@ -753,7 +795,7 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                     
                     {isEditing && (
                         <>
-                            <div className="space-y-4 flex flex-col">
+                            <div className="space-y-4 flex flex-col h-full">
                                 <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
                                     <AnimatePresence>
                                         {modifiedImageSrc && (
@@ -785,7 +827,9 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
                                         </div>
                                     )}
                                 </div>
-                                <ChangesSummary />
+                                <div className="flex-grow flex flex-col min-h-0">
+                                  <ChangesSummary />
+                                </div>
                             </div>
                             <div className="space-y-3">
                                 <Form {...form}>
@@ -908,4 +952,6 @@ export function PhotoFakeApp({ onFileSelect }: { onFileSelect: (file: File | nul
 
 
     
+    
+
     
